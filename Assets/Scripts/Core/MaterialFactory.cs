@@ -22,6 +22,13 @@ namespace ParryEverything.Core
             return new Material(Shader.Find(LitShader)) { color = color };
         }
 
+        // Matériau d'un shader du projet (Resources/Shaders), null si le shader est introuvable
+        public static Material FromShader(string shaderName)
+        {
+            Shader shader = Shader.Find(shaderName);
+            return shader != null ? new Material(shader) : null;
+        }
+
         // Matériau non éclairé blanc partagé : la couleur vient des particules elles-mêmes
         public static Material SharedUnlit
         {

@@ -15,29 +15,29 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 1
-  m_FogColor: {r: 0.06, g: 0.05, b: 0.14, a: 1}
+  m_FogColor: {r: 0.085, g: 0.1, b: 0.14, a: 1}
   m_FogMode: 1
-  m_FogDensity: 0.01
-  m_LinearFogStart: 12
-  m_LinearFogEnd: 160
-  m_AmbientSkyColor: {r: 0.2315, g: 0.33, b: 0.44099998, a: 1}
-  m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
-  m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
+  m_FogDensity: 0.03
+  m_LinearFogStart: 14
+  m_LinearFogEnd: 115
+  m_AmbientSkyColor: {r: 0.16, g: 0.2, b: 0.28, a: 1}
+  m_AmbientEquatorColor: {r: 0.08, g: 0.095, b: 0.13, a: 1}
+  m_AmbientGroundColor: {r: 0.03, g: 0.03, b: 0.04, a: 1}
   m_AmbientIntensity: 1
-  m_AmbientMode: 3
+  m_AmbientMode: 1
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 0}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
   m_HaloTexture: {fileID: 0}
   m_SpotCookie: {fileID: 10001, guid: 0000000000000000e000000000000000, type: 0}
-  m_DefaultReflectionMode: 0
+  m_DefaultReflectionMode: 1
   m_DefaultReflectionResolution: 128
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
-  m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 0}
+  m_CustomReflection: {fileID: 8900000, guid: 94e40f981b9a7a9329986f63ec583105, type: 2}
+  m_Sun: {fileID: 508620409}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -146,8 +146,8 @@ Light:
   m_Enabled: 1
   serializedVersion: 12
   m_Type: 1
-  m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
-  m_Intensity: 1
+  m_Color: {r: 0.62, g: 0.72, b: 0.9, a: 1}
+  m_Intensity: 0.55
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -209,7 +209,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 508620408}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
+  m_LocalRotation: {x: 0.042495195, y: 0.93742955, z: -0.3227829, w: 0.12341499}
   m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -725,9 +725,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AmbientWind
   volume: 0.25
-  whistle: 0.35
+  whistle: 0.2
   duringBoss: 0.5
-  gustSpeed: 1
+  gustSpeed: 0.7
+  drone: 0.5
+  whispers: 0.6
+  creaks: 0.5
+  whisperInterval: {x: 18, y: 45}
+  creakInterval: {x: 10, y: 30}
+  silenceInterval: {x: 45, y: 100}
 --- !u!82 &770000004
 AudioSource:
   m_ObjectHideFlags: 0
@@ -1049,6 +1055,98 @@ Transform:
   m_Children: []
   m_Father: {fileID: 565720371}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1222069220
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1222069222}
+  - component: {fileID: 1222069221}
+  - component: {fileID: 1222069223}
+  m_Layer: 0
+  m_Name: Atmosphere
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1222069221
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1222069220}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a0ef89a818470b68a119e39c325ce26, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ParryEverything.Environment.Atmosphere
+  sun: {fileID: 508620409}
+  moon: {fileID: 5769824345021976245}
+  sky: {fileID: 5769824345021976244}
+  screenMood: {fileID: 1289207565}
+  fogColor: {r: 0.085, g: 0.1, b: 0.14, a: 1}
+  fogStart: 14
+  fogEnd: 115
+  lightColor: {r: 0.62, g: 0.72, b: 0.9, a: 1}
+  lightIntensity: 0.55
+  moonColor: {r: 0.24, g: 0.06, b: 0.07, a: 1}
+  bossFogColor: {r: 0.12, g: 0.05, b: 0.06, a: 1}
+  bossFogEnd: 85
+  bossLightColor: {r: 0.75, g: 0.55, b: 0.6, a: 1}
+  bossLightIntensity: 0.42
+  bossMoonColor: {r: 0.45, g: 0.04, b: 0.04, a: 1}
+  transitionTime: 6
+  breathAmount: 0.1
+  breathSpeed: 0.12
+  flickerInterval: {x: 14, y: 40}
+  bossFlickerInterval: {x: 5, y: 12}
+  flickerDepth: 0.55
+--- !u!4 &1222069222
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1222069220}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1222069223
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1222069220}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0b9457e3212d1b5d8e42d657443b75f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ParryEverything.Environment.DistantEvents
+  rockFx: {fileID: 5769824345021976252}
+  dustFx: {fileID: 5769824345021976251}
+  emberFx: {fileID: 5769824345021976250}
+  fallingSoulFx: {fileID: 5769824345021976249}
+  vents:
+  - {fileID: 5769824345021976248}
+  - {fileID: 5769824345021976247}
+  - {fileID: 5769824345021976246}
+  wind: {fileID: 770000003}
+  hearingDistance: 110
+  interval: {x: 4, y: 14}
+  xRange: {x: -90, y: 90}
+  mountainDepth: {x: 38, y: 70}
+  mountainHeight: {x: 3, y: 12}
 --- !u!1 &1289207560
 GameObject:
   m_ObjectHideFlags: 0
@@ -1061,6 +1159,7 @@ GameObject:
   - component: {fileID: 1289207562}
   - component: {fileID: 1289207561}
   - component: {fileID: 1289207564}
+  - component: {fileID: 1289207565}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -1086,7 +1185,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.06, g: 0.05, b: 0.14, a: 1}
+  m_BackGroundColor: {r: 0.085, g: 0.1, b: 0.14, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -1155,6 +1254,31 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   target: {fileID: 1834448050}
+--- !u!114 &1289207565
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1289207560}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3a089e5f7f013a4292d48edc85c8d73, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ParryEverything.Core.ScreenMood
+  desaturate: 0.35
+  keepRed: 0.6
+  tint: {r: 0.86, g: 0.93, b: 1.05, a: 1}
+  vignette: 0.6
+  vignetteColor: {r: 0.01, g: 0.015, b: 0.03, a: 1}
+  grain: 0.035
+  aberration: 0.6
+  wobble: 0.25
+  dreadVignetteColor: {r: 0.09, g: 0, b: 0.01, a: 1}
+  dreadVignette: 0.85
+  dreadAberration: 1.6
+  dreadWobble: 0.8
+  dreadGrain: 0.05
 --- !u!1 &1551957863
 GameObject:
   m_ObjectHideFlags: 0
@@ -1559,6 +1683,51 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+--- !u!23 &5769824345021976244 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 7879555004638929726, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!23 &5769824345021976245 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 5235222393954461498, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!108 &5769824345021976246 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 6015064047347640853, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!108 &5769824345021976247 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 6971899420249572615, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!108 &5769824345021976248 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 5676329512156060777, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!198 &5769824345021976249 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 7367164056664355664, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!198 &5769824345021976250 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 1499310879933243323, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!198 &5769824345021976251 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 1388015921550843140, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!198 &5769824345021976252 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 5837511445624091569, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1573,3 +1742,4 @@ SceneRoots:
   - {fileID: 750000002}
   - {fileID: 760000002}
   - {fileID: 770000002}
+  - {fileID: 1222069222}

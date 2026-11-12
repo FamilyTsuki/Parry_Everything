@@ -16,6 +16,7 @@ Assets/
     Environment/     petits comportements de décor (FloatingBob, CameraParallax)
     Editor/          outils éditeur uniquement (AutoRefreshWatcher)
   Materials/         matériaux (.mat), nommés selon leur usage (Environment/ : décor)
+  Textures/          textures (Environment/ : particules de neige/brume, dégradé du ciel)
   Meshes/            meshes sauvegardés (Environment/SoulRealmMeshes.asset)
   Prefabs/           prefabs (Environment/SoulRealm.prefab = décor complet)
   PhysicsMaterials/  physic materials
