@@ -1,5 +1,8 @@
 # Parry Everything — Document de game design
 
+> **Copie locale.** La version de référence est le doc Claude : https://claude.ai/artifact/7ywaEeSmEjZvzwcMMQYqXS
+> Modifier le doc en priorité ; ce fichier est remis à jour depuis le doc sur demande.
+
 Document vivant : on y met toutes les idées, puis on les trie pour définir le jeu et son scope.
 Ce qui est marqué *(proposition)* vient de Claude et attend ta validation.
 Ton premier jet d'origine est conservé tel quel en annexe, en bas du fichier.
