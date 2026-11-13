@@ -119,6 +119,16 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!108 &330478564 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 5676329512156060777, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!198 &337968934 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 1499310879933243323, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &508620408
 GameObject:
   m_ObjectHideFlags: 0
@@ -447,6 +457,11 @@ MonoBehaviour:
   bounceBack: 4
   deathDuration: 0.25
   deathParticleCount: 25
+--- !u!108 &739207281 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 6971899420249572615, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &750000001
 GameObject:
   m_ObjectHideFlags: 0
@@ -1055,6 +1070,16 @@ Transform:
   m_Children: []
   m_Father: {fileID: 565720371}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!198 &1166078258 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 1388015921550843140, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!198 &1179923329 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 7367164056664355664, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
+  m_PrefabInstance: {fileID: 5769824345021976243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1222069220
 GameObject:
   m_ObjectHideFlags: 0
@@ -1134,12 +1159,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ParryEverything.Environment.DistantEvents
   rockFx: {fileID: 5769824345021976252}
-  dustFx: {fileID: 5769824345021976251}
-  emberFx: {fileID: 5769824345021976250}
-  fallingSoulFx: {fileID: 5769824345021976249}
+  dustFx: {fileID: 1166078258}
+  emberFx: {fileID: 337968934}
+  fallingSoulFx: {fileID: 1179923329}
   vents:
-  - {fileID: 5769824345021976248}
-  - {fileID: 5769824345021976247}
+  - {fileID: 330478564}
+  - {fileID: 739207281}
   - {fileID: 5769824345021976246}
   wind: {fileID: 770000003}
   hearingDistance: 110
@@ -1407,6 +1432,7 @@ GameObject:
   - component: {fileID: 1834448047}
   - component: {fileID: 1834448051}
   - component: {fileID: 1834448052}
+  - component: {fileID: 1834448053}
   m_Layer: 0
   m_Name: player
   m_TagString: Untagged
@@ -1427,7 +1453,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   speed: 7
-  life: 100
+  deathRestartDelay: 1.5
   jumpKey: 273
   jumpHeight: 2
   fallGravityMultiplier: 2.2
@@ -1626,6 +1652,22 @@ MonoBehaviour:
   previewCompress: 0
   previewVelocity: {x: 0, y: 0}
   previewFaceLeft: 0
+--- !u!114 &1834448053
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1834448045}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d461449ff624043abb75f531b136c46f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ParryEverything.Player.PlayerBody
+  soulMax: 100
+  soulRegenDelay: 2
+  soulRegenRate: 10
+  soulMinScale: 0.4
 --- !u!1001 &5769824345021976243
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1696,31 +1738,6 @@ MeshRenderer:
 --- !u!108 &5769824345021976246 stripped
 Light:
   m_CorrespondingSourceObject: {fileID: 6015064047347640853, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
-  m_PrefabInstance: {fileID: 5769824345021976243}
-  m_PrefabAsset: {fileID: 0}
---- !u!108 &5769824345021976247 stripped
-Light:
-  m_CorrespondingSourceObject: {fileID: 6971899420249572615, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
-  m_PrefabInstance: {fileID: 5769824345021976243}
-  m_PrefabAsset: {fileID: 0}
---- !u!108 &5769824345021976248 stripped
-Light:
-  m_CorrespondingSourceObject: {fileID: 5676329512156060777, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
-  m_PrefabInstance: {fileID: 5769824345021976243}
-  m_PrefabAsset: {fileID: 0}
---- !u!198 &5769824345021976249 stripped
-ParticleSystem:
-  m_CorrespondingSourceObject: {fileID: 7367164056664355664, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
-  m_PrefabInstance: {fileID: 5769824345021976243}
-  m_PrefabAsset: {fileID: 0}
---- !u!198 &5769824345021976250 stripped
-ParticleSystem:
-  m_CorrespondingSourceObject: {fileID: 1499310879933243323, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
-  m_PrefabInstance: {fileID: 5769824345021976243}
-  m_PrefabAsset: {fileID: 0}
---- !u!198 &5769824345021976251 stripped
-ParticleSystem:
-  m_CorrespondingSourceObject: {fileID: 1388015921550843140, guid: de5e92ac8fbaf4dea83e68ffa072c460, type: 3}
   m_PrefabInstance: {fileID: 5769824345021976243}
   m_PrefabAsset: {fileID: 0}
 --- !u!198 &5769824345021976252 stripped

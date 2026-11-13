@@ -84,7 +84,9 @@ namespace ParryEverything.Player
         private static readonly Vector3 tailSide = Vector3.right;
 
         private PlayerController owner;
+        private PlayerBody body;
         private Rigidbody rb;
+        private float soulScale = 1f;           // taille affichée : rattrape PlayerBody.SoulScale (l'âme se consume)
 
         private GameObject visual;
         private Mesh mesh;
@@ -307,7 +309,18 @@ namespace ParryEverything.Player
             float lean = -drag.x * leanAngle;
             Quaternion rot = Quaternion.Euler(0f, 0f, lean) * Quaternion.Euler(0f, yaw, 0f);
             visual.transform.rotation = rot;
-            visual.transform.localScale = Vector3.one * (1f + punch);
+            // L'âme consumée rétrécit, puis regrossit en se régénérant
+            if (playing)
+            {
+                if (body == null) body = GetComponent<PlayerBody>();
+                float targetScale = body != null ? body.SoulScale : 1f;
+                soulScale = Mathf.Lerp(soulScale, targetScale, 1f - Mathf.Exp(-8f * Time.unscaledDeltaTime));
+            }
+            else
+            {
+                soulScale = 1f;
+            }
+            visual.transform.localScale = Vector3.one * (soulScale + punch);
 
             Quaternion inv = Quaternion.Inverse(rot);
             dragLocal = inv * drag;

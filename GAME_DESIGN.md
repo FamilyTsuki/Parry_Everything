@@ -26,8 +26,8 @@ Ton premier jet d'origine est conservé tel quel en annexe, en bas du fichier.
 
 ## 3. Expérience visée
 
-- **Ressenti principal :** ⚠️ à définir
-- **Durée totale :** ⚠️ à définir
+- **Ressenti principal** *(proposition)* : tension, puis délivrance. Chaque parade réussie est un petit triomphe ; le joueur se sent fragile au début et devient, à force de maîtrise, presque intouchable.
+- **Durée totale** *(proposition)* : démo de 1 h à 1 h 30 (3 zones) ; jeu complet de 6 à 8 h.
 - **Difficulté :** exigeante mais juste. Chaque attaque est annoncée par un signal clair à parer. Mourir coûte peu grâce aux sanctuaires, mais un combat se gagne par la maîtrise.
 - **Ton :** sombre, avec un côté gore assumé (perte de membres).
 
@@ -71,6 +71,7 @@ Les trois choix partent du même souci (protéger l'enfant). Aucun n'est présen
 
 **Validé — mesurer « bon » ou « hypocrite ».**
 - **Épargner ou achever** les ennemis parés et étourdis : ça compte, mais ce ne doit pas être la seule mesure, sinon ça n'a pas de sens.
+  - **Validé — achever, c'est absorber l'âme.** Le chat ne tue pas : il absorbe l'âme de l'ennemi étourdi (parade au contact). Le corps vide redevient de la chair inerte.
 - **Les âmes errantes** : les bousculer ou les écraser compte comme de la cruauté ; les contourner, non.
 - **L'hypocrisie, c'est l'écart** entre le comportement pendant le jeu et le choix final. Elle ne force pas la mauvaise fin : elle rend le **combat final bien plus dur**.
 
@@ -144,6 +145,7 @@ Questions ouvertes :
 
 Questions ouvertes :
 - Les 3 parades parfaites : à la suite sur n'importe quoi, ou dans un délai précis ?
+  - *(proposition)* Sur n'importe quoi, mais chacune à moins de 2 s de la précédente. Un coup reçu ou une parade ratée remet le compteur à zéro.
 
 ### 6.3 Évolution : de l'âme au corps (pilier 2)
 
@@ -164,9 +166,21 @@ Questions ouvertes :
 
 Capacités citées : saut sur les murs, courir, parer plus vite.
 
+**Validé — la forme finale : un chat debout.** À la fin de l'évolution, le chat se tient et se déplace **sur 2 pattes**, comme un guerrier-chat. Référence : [References/chat_forme_finale.png](References/chat_forme_finale.png). On y voit un corps sombre bleu nuit, des yeux jaunes, le poitrail clair, une queue au bout de flamme orange, une silhouette fine et nerveuse, et une lame tenue en main.
+- *(proposition)* Le chat commence à 4 pattes (étape Pattes), puis **se redresse** à une étape plus tardive : les pattes avant deviennent des bras. Ça explique la perte d'un bras ou d'une jambe dans le premier jet.
+- ⚠️ À définir : à quelle étape il se redresse (la Queue, pour l'équilibre ?), et à quoi sert la lame (outil de parade ? pas d'attaque avant le choix final).
+
 ### 6.4 Perte de membres (côté gore)
 
-**Validé — le corps sert de barre de vie.** Pas de barre de vie classique : chaque coup reçu arrache une partie du corps, et la capacité liée est perdue avec elle. Quand tout le corps est perdu, on redevient une âme. Un coup reçu en âme, c'est la mort.
+**Validé — le corps sert de barre de vie.** Pas de barre de vie classique : **chaque membre a sa propre vie**. Un coup abîme un membre, sans forcément l'arracher ; le membre n'est arraché que quand sa vie tombe à zéro, et la capacité liée est perdue avec lui. Quand tout le corps est perdu, on redevient une âme.
+
+**Validé — l'âme se consume.** En âme, chaque coup reçu consume une partie de l'âme, qui **rétrécit**. Elle se régénère peu à peu avec le temps. Quand l'âme est entièrement consumée, le chat meurt.
+
+**Validé — les effets sur les membres.** Un membre peut subir un effet :
+- **Hémorragie** *(proposition)* : le membre perd de la vie en continu, jusqu'à la recouture ou au sanctuaire.
+- **Infection** *(proposition)* : le membre s'affaiblit lentement et l'infection gagne un membre voisin si on ne la soigne pas.
+- **Hypertrophie** *(proposition)* : le membre gonfle. Il est plus solide (plus de vie) mais alourdit le chat (plus lent, plus gros, plus facile à toucher).
+- ⚠️ À définir plus tard : ce qui cause chaque effet (type d'ennemi, de coup ?) et comment le soigner.
 
 - **Choix sacrifice :** au bord de la mort, le joueur peut choisir de se couper un membre (un bras, une jambe) pour survivre.
 - En échange, il perd la capacité liée à ce membre.
@@ -284,7 +298,7 @@ Bonnes bases, mais pas encore satisfaisantes : à retravailler.
 - Parade : attaques, projectiles, chute (+ explosions ?)
 - Perte de membre par sacrifice
 - Menu, game over, victoire, sauvegarde par point de contrôle
-- ⚠️ À trancher : la parade du temps est-elle dans le MVP ?
+- *(proposition)* La parade du temps **n'est pas dans le MVP** : elle appartient à la zone 5. La démo garde seulement l'assourdissement du son après des parades parfaites enchaînées, comme avant-goût.
 
 ### Version complète
 - Toutes les zones et tous les boss
@@ -293,9 +307,112 @@ Bonnes bases, mais pas encore satisfaisantes : à retravailler.
 - Murs et sols destructibles
 
 ### Hors scope (pour l'instant)
--
+*(proposition)*
+- Les fins et le combat final (zone 6) : seule la mesure du comportement est enregistrée dès la tranche verticale.
+- Le marché des âmes et la chair de remplacement.
+- Les murs et sols destructibles.
+- La manette et le remappage des touches (clavier seul au début).
+- Les options (son, graphismes), sauf le volume général.
 
 ⚠️ **Point d'attention :** en solo, 2-3 zones et 2-3 boss du niveau du Gardien des Enfers représentent plusieurs mois de travail. *(proposition)* Faire d'abord une **tranche verticale** (zone 1 complète, avec l'âme puis la 1re partie du corps) pour valider que les deux piliers sont amusants, avant de produire les zones suivantes.
+
+### Tranche verticale — spécification de dev *(proposition)*
+
+**But :** prouver que les piliers 1 (tout se pare) et 2 (l'âme se reconstruit un corps) sont amusants, sur la zone 1 seule. Toutes les valeurs chiffrées sont des points de départ, réglables dans l'Inspector.
+
+#### Décisions à valider avant de coder
+
+| # | Question | Réponse |
+|---|---|---|
+| D1 | L'âme encaisse-t-elle plusieurs coups ? | **Validé :** chaque coup consume l'âme, qui rétrécit, puis se régénère avec le temps (voir 6.4). |
+| D2 | Comment marche le sacrifice ? | ⚠️ Ouvert (proposition « choisir le membre perdu » refusée). Hors tranche verticale. *(remarque)* Avec une vie par membre, l'idée d'origine retrouve son sens : se couper un membre très abîmé ou infecté pour survivre. |
+| D3 | Comment achever un ennemi étourdi ? | **Validé :** parade au contact = absorber son âme ; le corps redevient chair inerte. S'éloigner = l'épargner. |
+| D4 | Recoudre : au sanctuaire ou sur place ? | ⚠️ Ouvert. En attendant, la tranche code les deux (sanctuaire automatique ; sur place en maintenant ↓ 1,5 s), facile à retirer. |
+| D5 | Un coup = un membre ? | **Validé :** non, chaque membre a sa vie ; un coup abîme un membre, qui n'est arraché qu'à zéro. Effets possibles : hémorragie, infection, hypertrophie (voir 6.4). |
+
+#### Parcours de la tranche
+
+1. **Arrivée en âme** dans l'enfer éteint (scène actuelle). Court passage d'apprentissage : un MeleeEnemy seul, puis un JumperEnemy.
+2. **Traversée** : 3 ou 4 rencontres, mélange des deux ennemis, des âmes errantes sur le chemin (à contourner).
+3. **Sanctuaire** : sauvegarde, la musique d'ambiance s'arrête, le thème du Gardien s'entend au loin.
+4. **Gardien des Enfers** (existe).
+5. **Chair du boss** : le Gardien vaincu devient de la chair inerte. Le chat s'en sert pour se coudre 4 pattes : courte vision du meurtre (2 ou 3 plans figés, sans texte).
+6. **La zone change** : l'enfer éteint se rallume (ou s'effondre).
+7. **Descente** : un passage vertical avec des chutes, pour apprendre la parade de chute et sentir le nouveau corps (course). 2 rencontres pour perdre et recoudre des pattes.
+8. **Fin de la tranche** : écran « à suivre », retour au menu.
+
+#### Le joueur : deux états
+
+| | Âme | Corps (4 pattes) |
+|---|---|---|
+| Vitesse de marche | 3,5 | 5 |
+| Course (Maj) | non | 8 |
+| Saut | lent et flottant, chute plafonnée à 6 | saut actuel, chute plafonnée à 18 |
+| Dégâts de chute | jamais | si la chute dépasse 4 m |
+| Parade : fenêtre / attente si ratée | 0,35 s / 0,5 s | 0,3 s / 0,3 s |
+| Encaisser les coups | l'âme se consume et rétrécit, puis se régénère (D1) | chaque patte a sa vie ; le coup touche la patte la plus proche du point d'impact (D5) |
+
+**Vie de l'âme** *(proposition)* : 100. Un coup retire le montant de dégâts actuel de l'ennemi. Taille de l'âme de 100 % à 40 %. Régénération de 10 par seconde, après 2 s sans coup. À 0 : mort.
+
+**Vie des pattes** *(proposition)* : 40 par patte, dans la même unité que les dégâts actuels des ennemis. Une patte abîmée se voit (coutures qui lâchent, chair à vif).
+
+**Pattes arrachées :** 3 pattes = vitesse −15 % ; 2 pattes = plus de course ; 1 patte = saut réduit de moitié ; 0 patte = retour à l'âme (vie de l'âme pleine).
+
+**Effets sur les membres (hémorragie, infection, hypertrophie) :** hors tranche verticale, mais `PlayerBody` doit prévoir un emplacement d'effet par membre.
+
+**Membre arraché :** il tombe au sol comme un objet ramassable (il reste en place jusqu'à la mort du joueur ou au sanctuaire). Le ramasser le garde « en poche » ; le recoudre le remet sur le corps (D4).
+
+**Parade de chute :** si la chute dépasse 4 m, appuyer sur parade dans les 0,15 s avant de toucher le sol annule les dégâts (poussière, petit hit stop). Sinon, une patte est arrachée.
+
+**Parade parfaite :** une parade réussie dans les 0,1 premières secondes de la fenêtre. Au bout de 3 enchaînées (moins de 2 s entre chaque) : le son s'assourdit et la musique baisse d'un demi-ton ; seul effet du temps dans la tranche.
+
+#### Mort, sauvegarde, menus
+
+- **Mort :** fondu au noir (1 s), retour au dernier sanctuaire avec l'état du corps sauvegardé à ce sanctuaire. Le boss repart de sa phase 1. Pas d'écran de game over séparé.
+- **Sauvegarde :** un fichier JSON dans `Application.persistentDataPath`. Contenu : sanctuaire actuel, boss vaincus, pattes possédées, compteurs de comportement. Écrite à chaque sanctuaire et à chaque boss vaincu.
+- **Comportement (enregistré, pas encore utilisé) :** ennemis épargnés, âmes absorbées, âmes errantes bousculées.
+- **Menus (OnGUI via `GuiDraw` pour l'instant) :** titre (Continuer, Nouvelle partie, Quitter) ; pause sur Échap (Reprendre, Menu titre) ; écran de fin de tranche.
+- **HUD :** aucune barre de vie. L'état se lit sur le corps du chat (pattes présentes et abîmées, taille de l'âme).
+
+#### Commandes (clavier)
+
+| Action | Touche |
+|---|---|
+| Se déplacer | ← → |
+| Sauter | ↑ |
+| Parer | X |
+| Courir (corps) | Maj gauche |
+| Recoudre (maintenir) | ↓ |
+| Pause | Échap |
+
+#### Architecture du code
+
+Respecte les conventions de `AGENTS.md`.
+
+| Script | Dossier | Rôle |
+|---|---|---|
+| `PlayerBody` | Player/ | état âme ou corps, vie de l'âme (et sa régénération), membres avec leur vie et un emplacement d'effet, événements `OnLimbDamaged` / `OnLimbLost` / `OnLimbSewn` / `OnBecameSoul`. Remplace `life` dans `PlayerController.TakeDamage` : les dégâts vont à l'âme, ou au membre le plus proche du point d'impact. |
+| `PlayerController` | Player/ | lit ses valeurs (vitesse, saut, parade) dans `PlayerBody` ; ajoute la course, la parade de chute, la parade parfaite. La barre de vie disparaît. |
+| `CatSoul` + nouveau visuel du corps | Player/ | affiche les pattes présentes, cousues et dépareillées ; la lueur de l'âme. |
+| `LimbPickup` | Player/ | membre au sol, ramassable. |
+| `Sanctuary` | Environment/ | point de sauvegarde, recouture automatique, coupe la musique d'ambiance. |
+| `SaveSystem` | Core/ | lecture et écriture du JSON. |
+| `GameFlow` | Core/ | états du jeu (menu, jeu, pause, mort, fin) et réapparition. |
+| `BehaviorLedger` | Core/ | compteurs de comportement. |
+| `BossFlesh` | Boss/ | ce que devient le Gardien vaincu : déclenche la couture des pattes et la vision. |
+
+#### Ordre de travail et critères de fin
+
+1. **`PlayerBody` + âme qui se consume.** Fini quand : chaque coup fait rétrécir l'âme, elle se régénère après 2 s sans coup, elle meurt à 0, et la barre de vie a disparu.
+2. **`GameFlow` + `Sanctuary` + `SaveSystem`.** Fini quand : mourir ramène au sanctuaire, et quitter puis Continuer reprend au même sanctuaire.
+3. **Menus** titre et pause. Fini quand : on lance, met en pause et quitte sans passer par l'éditeur.
+4. **Corps à 4 pattes** (activé par une touche de debug au début). Fini quand : un coup abîme la patte la plus proche, elle s'arrache à 0, et chaque perte se voit et se sent au déplacement.
+5. **`LimbPickup` + recouture.** Fini quand : on ramasse une patte et on la recoud sur place ou au sanctuaire.
+6. **Parade de chute + course.** Fini quand : une chute de plus de 4 m blesse, sauf parade au bon moment.
+7. **`BossFlesh`** : Gardien vaincu, chair, couture, vision, la zone change. Fini quand : la mort du Gardien donne les pattes, sans touche de debug.
+8. **Parcours de la tranche** : placer les rencontres, le sanctuaire, la descente et l'écran de fin. Fini quand : on joue du menu à l'écran de fin d'une traite.
+9. **Parade parfaite + assourdissement**, **absorption d'âme** (ennemi étourdi → chair inerte) et **`BehaviorLedger`** (âmes absorbées, ennemis épargnés, âmes bousculées).
+10. **Test de jeu :** faire jouer 2 ou 3 personnes, noter où elles meurent et ce qu'elles ressentent, régler les valeurs.
 
 ## 10. Décisions
 
@@ -306,7 +423,7 @@ Bonnes bases, mais pas encore satisfaisantes : à retravailler.
 - 2026-11-12 — Projet solo, sortie PC.
 - 2026-11-12 — Pas de dégâts de chute pour l'âme (elle flotte) : la parade de chute n'a de sens qu'avec un corps.
 - 2026-11-12 — La parade du temps demande la vitesse de parade d'un corps évolué : c'est le sommet de l'évolution.
-- 2026-11-12 — Le corps sert de barre de vie : un coup arrache une partie ; sans corps, un coup en âme tue.
+- 2026-11-12 — Le corps sert de barre de vie : un coup arrache une partie ; sans corps, un coup en âme tue. *(remplacé le 2026-11-13, voir plus bas)*
 - 2026-11-12 — Les boss vaincus redeviennent de la chair inerte, que le chat utilise (de façon gore) pour reconstruire son corps.
 - 2026-11-12 — L'horloge n'apparaît que dans une zone de fin de jeu, pour faire découvrir la parade du temps.
 - 2026-11-12 — Parer une explosion contre un mur le détruit, mais ce n'est qu'une des façons de détruire le décor.
@@ -344,6 +461,11 @@ Bonnes bases, mais pas encore satisfaisantes : à retravailler.
 - 2026-11-12 — Boss de la Tour de l'Horloge : l'Horloger, intouchable, attaque au rythme de l'horloge, dépérit à chaque attaque, sans barre de vie.
 - 2026-11-12 — Piste retenue : chaque boss incarne une douleur du père.
 - 2026-11-12 — « Oublier l'enfant » = attaquer le père alors que l'enfant est encore en danger, au lieu de le protéger d'abord.
+- 2026-11-13 — En âme, un coup consume l'âme, qui rétrécit puis se régénère avec le temps.
+- 2026-11-13 — Chaque membre a sa propre vie : un coup l'abîme, il n'est arraché qu'à zéro. Effets possibles sur les membres : hémorragie, infection, hypertrophie.
+- 2026-11-13 — Achever un ennemi étourdi = absorber son âme ; son corps redevient chair inerte.
+- 2026-11-13 — L'âme entièrement consumée = mort du chat.
+- 2026-11-13 — Forme finale : un chat debout sur 2 pattes, guerrier (référence dans References/).
 
 ## 11. Idées en vrac
 
@@ -370,6 +492,8 @@ Gardées pour mémoire, pour ne pas les reproposer.
 
 - **Le marché des âmes compte contre le joueur** s'il échange des membres arrachés à d'autres âmes.
 - **Le membre perdu revient au sanctuaire suivant** (abîmé, à atteindre sans lui).
+- **La lueur de l'âme qui encaisse 3 coups** (remplacée par l'âme qui se consume et rétrécit).
+- **Le sacrifice comme choix du membre perdu** au ralenti, au moment d'un coup.
 
 
 ## 14. Recherche : mythes, légendes, religions

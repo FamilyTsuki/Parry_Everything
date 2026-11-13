@@ -47,7 +47,6 @@ namespace ParryEverything.Audio
         // État du thread principal
         private bool parried;
         private bool wasActive;
-        private float maxLife;
 
         // ---------- Synthèse ----------
         private const int T_BRASS = 0, T_STRING = 1, T_HAT = 2, T_TAIKO = 3, T_SNARE = 4, T_CHOIR = 5, T_PAD = 6, T_CYMBAL = 7, T_SWELL = 8, T_BOOM = 9;
@@ -136,7 +135,6 @@ namespace ParryEverything.Audio
         {
             if (hero == null) hero = FindFirstObjectByType<PlayerController>();
             if (boss == null && !wasActive) boss = FindFirstObjectByType<HellGuardian>();
-            if (hero != null && maxLife <= 0f) maxLife = hero.Life;
 
             bool active = boss != null && boss.IsActive && !boss.IsDead;
             if (active)
@@ -162,7 +160,7 @@ namespace ParryEverything.Audio
             layerRequest[L_VICTORY] = victory ? 1f : 0f;
 
             // Vie du joueur : tension sous 55 %, cœur sous 30 %
-            float ratio = (hero != null && maxLife > 0f) ? Mathf.Clamp01(hero.Life / maxLife) : 1f;
+            float ratio = hero != null ? hero.HealthRatio : 1f;
             layerRequest[L_TENSION] = on && !victory ? Mathf.Clamp01((0.55f - ratio) / 0.35f) : 0f;
             layerRequest[L_HEART] = on && ratio > 0f ? Mathf.Clamp01((0.3f - ratio) / 0.25f) : 0f;
 

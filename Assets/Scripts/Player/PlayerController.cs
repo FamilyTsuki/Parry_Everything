@@ -2,19 +2,21 @@ using System;
 using System.Collections;
 using ParryEverything.Core;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Random = UnityEngine.Random;
 
 namespace ParryEverything.Player
 {
-    // Joueur : déplacement, saut, parade, dégâts et HUD (barre de vie + voile rouge).
+    // Joueur : déplacement, saut, parade, dégâts et voile rouge à l'écran.
+    // La santé (âme, membres) est gérée par PlayerBody : pas de barre de vie.
     [RequireComponent(typeof(Rigidbody))]
     public class PlayerController : MonoBehaviour
     {
         [Header("Déplacement")]
         [SerializeField] private float speed = 5.0f;
 
-        [Header("Vie")]
-        [SerializeField] private float life = 100.0f;
+        [Header("Mort")]
+        [SerializeField] private float deathRestartDelay = 1.5f; // en attendant les sanctuaires : on relance la scène
 
         [Header("Saut")]
         [SerializeField] private KeyCode jumpKey = KeyCode.UpArrow;
@@ -65,12 +67,15 @@ namespace ParryEverything.Player
         // Prévient les autres scripts (ex : musique) à chaque parade réussie
         public static event Action OnParry;
 
-        public float Life => life;
+        // Santé globale de 0 à 1 (musique, effets d'écran)
+        public float HealthRatio => body != null ? body.HealthRatio : 1f;
+        public bool IsDead => body != null && body.IsDead;
         public float Facing => facing;
         public bool IsGrounded => coyoteTimer > 0f;
         public bool IsParrying() => parryTimer > 0f;
 
         private Rigidbody rb;
+        private PlayerBody body;
         private CatSoul soul; // visuel : âme de chat
         private GameObject parryStar;
         private AudioSource sfx;
@@ -88,9 +93,7 @@ namespace ParryEverything.Player
         private float parryTimer;          // temps restant de la fenêtre de parade
         private float parryCooldownTimer;  // temps avant de pouvoir re-parer
 
-        // HUD
-        private float maxLife;
-        private float displayLife;          // barre claire qui rattrape la vraie vie
+        // Voile rouge
         private float hurtTime = -10f;      // temps réel du dernier coup
         private float hurtStrength;
 
@@ -98,6 +101,15 @@ namespace ParryEverything.Player
         private bool isKnockedBack;
         private bool isHitStopped;
         private float moveX;
+
+        private void Awake()
+        {
+            body = GetComponent<PlayerBody>();
+            if (body == null)
+            {
+                body = gameObject.AddComponent<PlayerBody>();
+            }
+        }
 
         private void Start()
         {
@@ -110,7 +122,6 @@ namespace ParryEverything.Player
                 soul = gameObject.AddComponent<CatSoul>();
             }
             parryStar = CreateStar();
-            maxLife = displayLife = life;
             sfx = gameObject.AddComponent<AudioSource>();
             sfx.playOnAwake = false;
             sfx.spatialBlend = 0f;
@@ -122,6 +133,11 @@ namespace ParryEverything.Player
         {
             // Sans touche appuyée, pas de déplacement
             moveX = 0f;
+            jumpHeld = false;
+            if (IsDead)
+            {
+                return;
+            }
             if (Input.GetKey(KeyCode.RightArrow))
             {
                 moveX = 1f;
@@ -254,13 +270,17 @@ namespace ParryEverything.Player
         // hitPoint : point de contact du coup (pour les étincelles), optionnel
         public bool TakeDamage(float damage, Transform source = null, Vector3? hitPoint = null)
         {
+            if (IsDead)
+            {
+                return true;
+            }
             if (IsParrying())
             {
                 OnParried(source, hitPoint);
                 return false;
             }
 
-            life -= damage;
+            bool killed = body.ApplyDamage(damage);
             if (soul != null)
             {
                 soul.OnHurt();
@@ -279,7 +299,7 @@ namespace ParryEverything.Player
             bloodPos.z = transform.position.z;
             SpawnSparks(bloodPos, hurtColor, 50, 1.3f);
 
-            if (life <= 0)
+            if (killed)
             {
                 Die();
             }
@@ -292,7 +312,7 @@ namespace ParryEverything.Player
                 isKnockedBack = true;
             }
 
-            if (life > 0)
+            if (!killed)
             {
                 // Secousse plus forte pour les gros coups
                 GameCamera.ShakeMain(shakeDuration + 0.1f, shakeMagnitude + damage * 0.012f);
@@ -353,10 +373,23 @@ namespace ParryEverything.Player
             isHitStopped = false;
         }
 
+        // Âme consumée. Provisoire : on relance la scène (les sanctuaires remplaceront ça).
         private void Die()
         {
-            // TODO : mort du joueur (recharger la scène, écran de game over...)
-            Debug.Log("Player has died.");
+            parryTimer = 0f;
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+            }
+            GameCamera.ShakeMain(shakeDuration + 0.2f, shakeMagnitude * 2f);
+            StartCoroutine(RestartAfterDeath());
+        }
+
+        private IEnumerator RestartAfterDeath()
+        {
+            yield return new WaitForSecondsRealtime(deathRestartDelay);
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 
         // ---------- Effets ----------
@@ -426,15 +459,13 @@ namespace ParryEverything.Player
 
         // ---------- HUD ----------
 
-        // Voile rouge sur les bords de l'écran (coup reçu, puis pulsation quand la vie est basse) + barre de vie
+        // Voile rouge sur les bords de l'écran : coup reçu, puis pulsation quand la santé est basse.
+        // Pas de barre de vie : l'état se lit sur le personnage.
         private void OnGUI()
         {
-            if (maxLife <= 0f) return;
             if (Event.current.type != EventType.Repaint) return;
-            displayLife = Mathf.MoveTowards(displayLife, Mathf.Max(life, 0f), maxLife * 0.5f * Time.unscaledDeltaTime);
-            if (displayLife < life) displayLife = life;
 
-            float ratio = Mathf.Clamp01(life / maxLife);
+            float ratio = HealthRatio;
             float since = Time.unscaledTime - hurtTime;
             float hit = since < 0.6f ? hurtStrength * (1f - since / 0.6f) : 0f;
             float low = ratio < 0.3f ? (0.3f - ratio) / 0.3f * (0.25f + 0.15f * Mathf.Sin(Time.unscaledTime * 6f)) : 0f;
@@ -446,21 +477,6 @@ namespace ParryEverything.Player
                 GUI.color = new Color(hurtColor.r, hurtColor.g, hurtColor.b, a);
                 GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), vignetteTex);
             }
-
-            // Barre de vie en haut à gauche, tremble au moment du coup
-            float w = 260f, h = 16f;
-            float x = 24f, y = 22f;
-            if (since < 0.3f)
-            {
-                x += Random.Range(-4f, 4f) * (1f - since / 0.3f);
-                y += Random.Range(-3f, 3f) * (1f - since / 0.3f);
-            }
-            GuiDraw.FilledRect(new Rect(x - 3f, y - 3f, w + 6f, h + 6f), new Color(0f, 0f, 0f, 0.8f));
-            GuiDraw.FilledRect(new Rect(x, y, w, h), new Color(0.15f, 0.03f, 0.05f, 0.9f));
-            GuiDraw.FilledRect(new Rect(x, y, w * Mathf.Clamp01(displayLife / maxLife), h), new Color(1f, 0.9f, 0.85f));
-            Color lifeColor = Color.Lerp(new Color(0.85f, 0.1f, 0.15f), new Color(0.35f, 0.95f, 0.75f), ratio);
-            GuiDraw.FilledRect(new Rect(x, y, w * ratio, h), Color.Lerp(lifeColor, Color.white, hit * 0.6f));
-            GuiDraw.FilledRect(new Rect(x, y, w * ratio, h * 0.35f), new Color(1f, 1f, 1f, 0.2f));
             GUI.color = old;
         }
 
