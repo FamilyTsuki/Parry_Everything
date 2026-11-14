@@ -340,23 +340,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: ParryEverything::ParryEverything.Player.CatBody
   fleshBallPrefab: {fileID: 809146841136963118, guid: ea1eb4d2700a5db78839d5b5ca1c114b, type: 3}
   legPrefab: {fileID: 5190541242717238111, guid: ad5ac09d24eda33b6a80582aee6b48cb, type: 3}
+  armPrefab: {fileID: 8675093092367670120, guid: 978507c331008f67caf28656b242fdc7, type: 3}
+  headPrefab: {fileID: 7526301118249170449, guid: 272b3ff2eeb077855a9f2b541636455e, type: 3}
+  tailPrefab: {fileID: 7757155907763590256, guid: 3eb4fe03450cad60192e35f6cd1215d0, type: 3}
   ballHeight: -0.08
   standingBallHeight: 0.72
   hipHeight: 0.3
   standingTilt: 22
   legSplay: 10
   morphSpeed: 3
-  thighVector: {x: 0.14, y: -0.36}
-  shinVector: {x: 0, y: -0.47}
+  turnSpeed: 900
   ankleHeight: 0.07
-  strideMin: 0.9
+  toeOff: 30
+  airToeDown: 35
+  strideMin: 0.82
   stridePerSpeed: 0.12
   strideMax: 1.4
   maxReach: 0.72
   dutyFactor: 0.5
   stepHeight: 0.25
   walkFade: 5
-  walkCrouch: 0.24
+  walkCrouch: 0.15
   runCrouch: 0.3
   runDutyFactor: 0.3
   runBlendFrom: 3.8
@@ -372,6 +376,28 @@ MonoBehaviour:
   stepPitch: 10
   breathing: 0.012
   oneLegHop: 2.5
+  headLevel: 0.85
+  headNod: 35
+  headBob: 3
+  armHang: 0.6
+  armSwing: 30
+  runArmSwing: 55
+  elbowBend: 25
+  runElbowBend: 70
+  parryArmAngle: 95
+  airArmAngle: 55
+  armSharpness: 14
+  tailLift: 25
+  tailCurl: 9
+  tailWave: 8
+  tailWaveSpeed: 2.6
+  tailDrag: 3
+  flameFlicker: 0.25
+  furFullAbove: 0.85
+  furGoneBelow: 0.15
+  hypertrophyScale: 1.25
+  bleedDripInterval: 0.3
+  infectionMin: 0.35
   shakeBelow: 0.35
   parryFlashTime: 0.1
   fillColor: {r: 0.75, g: 0.68, b: 0.85, a: 1}
@@ -990,6 +1016,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: ParryEverything::ParryEverything.Lab.AnimationLab
   testFleshLife: 80
   testLegLife: 40
+  testPartLife: 30
   hurtDamage: 6
   walkRange: 4
   panelWidth: 320

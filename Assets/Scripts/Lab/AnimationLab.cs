@@ -8,7 +8,9 @@ namespace ParryEverything.Lab
     // Scène AnimationLab : regarder les animations du chat et du boss une par une.
     // Panneau à gauche :
     //  - Temps  : pause, image par image, ralenti (n'écrase pas les arrêts du temps du jeu) ;
-    //  - Chat   : forme (âme, boule, debout, une patte), marche / course auto en aller-retour, saut, parade, coup reçu ;
+    //  - Chat   : forme (âme, boule, debout, une patte, complet), bras / tête / queue un par un,
+    //             marche / course auto en aller-retour, saut, parade, coup reçu,
+    //             vie et effet de chaque membre (pour voir fourrure, chair cousue, hémorragie, infection, hypertrophie) ;
     //  - Boss   : phase I à V, chaque geste, rejouer en boucle ;
     //  - Caméra : cible et angle (clic droit : tourner, molette : zoom, clic molette : décaler).
     // Le chat reste jouable au clavier ; il est invincible. Les réglages des scripts se changent en direct dans l'Inspector.
@@ -16,6 +18,7 @@ namespace ParryEverything.Lab
     {
         [SerializeField] private float testFleshLife = 80f;
         [SerializeField] private float testLegLife = 40f;
+        [SerializeField] private float testPartLife = 30f;      // bras, tête, queue
         [SerializeField] private float hurtDamage = 6f;
         [SerializeField] private float walkRange = 4f;          // aller-retour de la marche auto autour du départ
         [SerializeField] private float panelWidth = 320f;
@@ -25,6 +28,7 @@ namespace ParryEverything.Lab
         private static readonly float[] Speeds = { 0.05f, 0.1f, 0.25f, 0.5f, 1f };
         private static readonly string[] SpeedLabels = { "×0.05", "×0.1", "×0.25", "×0.5", "×1" };
         private static readonly string[] PhaseLabels = { "I", "II", "III", "IV", "V" };
+        private static readonly string[] EffectLabels = { "Aucun", "Hémorr.", "Infect.", "Hypertr." };   // ordre de LimbEffect
         private static readonly (HellGuardian.LabMove move, string label)[] BossMoves =
         {
             (HellGuardian.LabMove.Swing, "Faux"),
@@ -57,6 +61,7 @@ namespace ParryEverything.Lab
         private Focus focus = Focus.Cat;
         private Vector2 scroll;
         private GUIStyle header;
+        private bool collapsed;         // panneau replié (pour voir toute la scène)
 
         private void Start()
         {
@@ -144,9 +149,24 @@ namespace ParryEverything.Lab
             {
                 header = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold, fontSize = 13 };
             }
-            Rect area = new Rect(8f, 8f, panelWidth, Screen.height - 16f);
+            // Vue Game étroite : tout le panneau rétrécit pour tenir dans la moitié de la largeur (jusqu'à 55 %)
+            float scale = Mathf.Clamp((Screen.width * 0.5f - 16f) / panelWidth, 0.55f, 1f);
+            Matrix4x4 oldMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
+            float height = Screen.height / scale - 16f;
+
+            // Replié : un seul bouton pour le rouvrir
+            if (collapsed)
+            {
+                if (GUI.Button(new Rect(8f, 8f, 90f, 26f), "Panneau >>")) collapsed = false;
+                GUI.matrix = oldMatrix;
+                return;
+            }
+
+            Rect area = new Rect(8f, 8f, panelWidth, height);
             GuiDraw.FilledRect(area, new Color(0f, 0f, 0f, 0.55f));
             GUILayout.BeginArea(new Rect(area.x + 6f, area.y + 6f, area.width - 12f, area.height - 12f));
+            if (GUILayout.Button("<< Replier le panneau")) collapsed = true;
             scroll = GUILayout.BeginScrollView(scroll);
 
             TimePanel();
@@ -160,6 +180,7 @@ namespace ParryEverything.Lab
 
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+            GUI.matrix = oldMatrix;
         }
 
         private void TimePanel()
@@ -200,7 +221,17 @@ namespace ParryEverything.Lab
             if (GUILayout.Button("Boule")) SetForm(1);
             if (GUILayout.Button("Debout")) SetForm(2);
             if (GUILayout.Button("1 patte")) SetForm(3);
+            if (GUILayout.Button("Complet")) SetForm(4);
             GUILayout.EndHorizontal();
+
+            // Pièces du chat complet, ajoutées ou retirées une par une (il faut la chair)
+            GUI.enabled = body.HasBody;
+            GUILayout.BeginHorizontal();
+            TogglePart("Bras", LimbKind.Arm, () => Limb.CatArms(testPartLife));
+            TogglePart("Tête", LimbKind.Head, () => new[] { Limb.CatHead(testPartLife) });
+            TogglePart("Queue", LimbKind.Tail, () => new[] { Limb.CatTail(testPartLife) });
+            GUILayout.EndHorizontal();
+            GUI.enabled = true;
 
             walkMode = GUILayout.Toolbar(walkMode, new[] { "Immobile", "Marche", "Course" });
 
@@ -223,9 +254,11 @@ namespace ParryEverything.Lab
                 else body.transform.position = playerHome;
             }
             GUILayout.EndHorizontal();
+
+            LimbStatePanel();
         }
 
-        // 0 âme, 1 boule, 2 debout, 3 debout sur une patte
+        // 0 âme, 1 boule, 2 debout, 3 debout sur une patte, 4 chat complet (bras, tête, queue)
         private void SetForm(int form)
         {
             body.RemoveAllLimbs();
@@ -236,10 +269,67 @@ namespace ParryEverything.Lab
                 foreach (Limb limb in body.Limbs)
                 {
                     if (limb.Kind != LimbKind.Leg) continue;
+                    // Le chat du labo est invincible : on lève l'invincibilité le temps d'arracher la patte
+                    body.Invulnerable = false;
                     body.TearLimb(limb);
+                    body.Invulnerable = true;
                     break;
                 }
             }
+            if (form == 4)
+            {
+                body.AttachLimbs(Limb.CatArms(testPartLife));
+                body.AttachLimb(Limb.CatHead(testPartLife));
+                body.AttachLimb(Limb.CatTail(testPartLife));
+            }
+        }
+
+        // Bouton qui ajoute la pièce si elle manque, la retire sinon
+        private void TogglePart(string label, LimbKind kind, System.Func<Limb[]> make)
+        {
+            bool has = false;
+            foreach (Limb limb in body.Limbs) has |= limb.Kind == kind && !limb.IsTorn;
+            if (!GUILayout.Button((has ? "− " : "+ ") + label)) return;
+
+            // Recompose le corps : même chair et mêmes membres, avec ou sans cette pièce
+            var keep = new System.Collections.Generic.List<Limb>();
+            foreach (Limb limb in body.Limbs)
+            {
+                if (limb.Kind != kind && limb.Kind != LimbKind.Flesh && !limb.IsTorn) keep.Add(limb);
+            }
+            Limb flesh = body.FleshLimb;
+            body.GrantFlesh(flesh);
+            body.AttachLimbs(keep);
+            if (!has) body.AttachLimbs(make());
+        }
+
+        // Vie et effet de chaque membre, pour voir son apparence (fourrure → chair cousue → à vif)
+        private void LimbStatePanel()
+        {
+            if (body.Limbs.Count == 0) return;
+            GUILayout.Space(4f);
+            GUILayout.Label("Membres : vie et effet");
+            foreach (Limb limb in body.Limbs)
+            {
+                if (limb.IsTorn) continue;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(limb.Id, GUILayout.Width(95f));
+                float ratio = GUILayout.HorizontalSlider(limb.LifeRatio, 0.02f, 1f);
+                GUILayout.EndHorizontal();
+                if (!Mathf.Approximately(ratio, limb.LifeRatio)) SetLife(limb, ratio);
+
+                int effect = GUILayout.Toolbar((int)limb.Effect, EffectLabels);
+                if (effect != (int)limb.Effect) limb.Effect = (LimbEffect)effect;
+            }
+        }
+
+        // Règle la vie d'un membre (sans l'arracher) en gardant son effet
+        private static void SetLife(Limb limb, float ratio)
+        {
+            LimbEffect effect = limb.Effect;
+            limb.Restore();
+            limb.Damage(limb.MaxLife * (1f - ratio));
+            limb.Effect = effect;
         }
 
         // Coup reçu : l'invincibilité est levée le temps du coup

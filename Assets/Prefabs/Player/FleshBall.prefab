@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 6383581480437436037}
   - component: {fileID: 3931235600287075682}
   - component: {fileID: 5458532950436134231}
+  - component: {fileID: 634963182446842062}
   m_Layer: 0
   m_Name: FleshBall
   m_TagString: Untagged
@@ -90,3 +91,19 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &634963182446842062
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 809146841136963118}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9114c26fa5ae0d114ab122a979134bb5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: ParryEverything::ParryEverything.Player.CatTorsoRig
+  neck: {x: 0.08, y: 0.45, z: 0}
+  shoulder: {x: 0.08, y: 0.24, z: -0.27}
+  tailBase: {x: -0.22, y: -0.32, z: 0}
+  hip: {x: -0.06, y: -0.4, z: -0.15}

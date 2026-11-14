@@ -47,4 +47,5 @@ Assets/
   - `SaveSystem` / `SaveData` pour la sauvegarde (nouveau champ : valeur par défaut sensée ; changement de sens : monter `CurrentVersion` + migration).
 - Commentaires en français, identifiants en anglais.
 - Décor : vrais objets dans la scène / prefabs, éditables à la main. Pas de génération du décor par script.
-- Modèles du chat : générés par Editor/CatModelBuilder. Forme, placement, couleurs : asset `Meshes/Player/CatModelSettings.asset` (menu `Parry Everything > Modèle du chat : réglages`) ; chaque modification reconstruit les meshes et prefabs en place. Les repères de la patte sont écrits sur le prefab (`CatLegRig`) et lus par CatBody. Placement en jeu : composant CatBody.
+- Modèles du chat (torse, pattes, bras, tête, queue) : générés par Editor/CatModelBuilder. Forme, placement, couleurs : asset `Meshes/Player/CatModelSettings.asset` (menu `Parry Everything > Modèle du chat : réglages`) ; chaque modification reconstruit les meshes et prefabs en place. Repères écrits sur les prefabs (`CatLegRig`, `CatTorsoRig`) et lus par CatBody. Placement et animation en jeu : composant CatBody. Apparence selon l'état du membre : shader `FleshLit` (fourrure en UV1, veines en UV2) piloté par CatBody.
+- Nouveau type de membre : l'ajouter À LA FIN de `LimbKind` (la sauvegarde stocke le numéro).

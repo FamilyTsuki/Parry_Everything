@@ -2,7 +2,8 @@ using UnityEngine;
 
 namespace ParryEverything.Editor
 {
-    // Réglages des modèles 3D du chat : le corps de chair (FleshBall) et la patte (CatLeg).
+    // Réglages des modèles 3D du chat : torse (FleshBall), pattes (CatLeg), bras (CatArm), tête (CatHead), queue (CatTail).
+    // Chaque membre a deux couches : la chair cousue dessous, la fourrure par-dessus (qui part quand il est abîmé).
     // Fichier : Assets/Meshes/Player/CatModelSettings.asset
     //   → menu Parry Everything > Modèle du chat : réglages (le sélectionne, le crée s'il manque).
     // Chaque modification dans l'Inspector reconstruit les modèles tout de suite, même en Play.
@@ -19,19 +20,33 @@ namespace ParryEverything.Editor
         [Tooltip("Reconstruit à chaque modification. Décocher pour enchaîner plusieurs changements, puis « Reconstruire ».")]
         public bool autoRebuild = true;
 
-        [Header("Corps — forme d'œuf / capsule")]
+        [Header("Torse — silhouette")]
         [Tooltip("Demi-tailles en mètres : X largeur (avant-arrière), Y hauteur, Z épaisseur.")]
-        public Vector3 bodyRadii = new Vector3(0.29f, 0.56f, 0.28f);
+        public Vector3 bodyRadii = new Vector3(0.26f, 0.58f, 0.25f);
+        [Tooltip("Largeur du torse selon la hauteur. Horizontal : −1 = bas (bassin), 0 = milieu, 1 = haut (épaules).\n" +
+                 "Vertical : multiplicateur de largeur (1 = largeur réglée plus haut). Creux = taille fine.")]
+        public AnimationCurve torsoWidth = new AnimationCurve(
+            new Keyframe(-1f, 0.85f), new Keyframe(-0.6f, 1.08f),  // bassin large
+            new Keyframe(-0.1f, 0.7f),                              // taille fine
+            new Keyframe(0.4f, 1.05f),                              // poitrail
+            new Keyframe(0.85f, 0.85f), new Keyframe(1f, 0.55f));  // épaules
+        [Tooltip("Avancée du torse selon la hauteur (même axe horizontal). > 0 : vers l'avant, en part de la largeur X.\n" +
+                 "Poitrail bombé en haut, ventre rentré, fesses en arrière : dos cambré.")]
+        public AnimationCurve torsoSpine = new AnimationCurve(
+            new Keyframe(-1f, -0.05f), new Keyframe(-0.6f, -0.15f), // fesses en arrière
+            new Keyframe(-0.1f, 0.02f),                              // ventre
+            new Keyframe(0.4f, 0.2f),                                // poitrail en avant
+            new Keyframe(1f, 0.05f));
         [Tooltip("> 0 : haut plus étroit que le bas (œuf). < 0 : l'inverse. 0 : symétrique.")]
-        [Range(-0.5f, 0.5f)] public float bodyTaper = 0.14f;
+        [Range(-0.5f, 0.5f)] public float bodyTaper = 0f;
         [Tooltip("1 : ovale. Plus petit : flancs droits et bouts arrondis (capsule).")]
         [Range(0.3f, 1f)] public float bodyFlank = 0.75f;
         [Tooltip("Courbure. > 0 : les deux bouts partent vers l'arrière (haricot). < 0 : vers l'avant.")]
-        [Range(-0.3f, 0.3f)] public float bodyBend = 0.03f;
+        [Range(-0.3f, 0.3f)] public float bodyBend = 0f;
         [Tooltip("Finesse du maillage. 4 ≈ 2 500 sommets, 5 ≈ 10 000.")]
         [Range(2, 5)] public int bodyDetail = 4;
 
-        [Header("Corps — placement dans le modèle")]
+        [Header("Torse — placement dans le modèle")]
         [Tooltip("Décalage du corps (mètres) par rapport au centre du modèle.")]
         public Vector3 bodyOffset = new Vector3(0f, -0.03f, 0f);
         [Tooltip("Rotation du corps (degrés). Z : penche avant/arrière. Y : tourne. X : roule vers la caméra.")]
@@ -39,7 +54,7 @@ namespace ParryEverything.Editor
         [Tooltip("Échelle du corps, appliquée après la forme (1 = taille réglée plus haut).")]
         public Vector3 bodyScale = Vector3.one;
 
-        [Header("Corps — chair")]
+        [Header("Torse — chair")]
         [Tooltip("Hauteur des bosses et du grain. 0 : lisse. 0.3 : patate.")]
         [Range(0f, 0.5f)] public float lumpiness = 0.06f;
         [Tooltip("Nombre de grosses bosses.")]
@@ -53,7 +68,7 @@ namespace ParryEverything.Editor
         [Tooltip("Profondeur du sillon des coutures.")]
         [Range(0f, 0.15f)] public float seamDepth = 0.055f;
 
-        [Header("Corps — couleurs")]
+        [Header("Torse — couleurs")]
         [Tooltip("Couleurs possibles des morceaux de chair (tirées au hasard selon « seed »).")]
         public Color[] fleshPalette =
         {
@@ -74,13 +89,144 @@ namespace ParryEverything.Editor
         [Tooltip("Veines plus vives par endroits.")]
         public Color veinColor = new Color(0.62f, 0.12f, 0.12f);
 
+        [Header("Fourrure (membre en bonne santé)")]
+        // Abîmé, un membre perd sa fourrure par plaques et montre la chair cousue dessous (shader FleshLit)
+        [Tooltip("Fourrure principale (bleu nuit).")]
+        public Color furDark = new Color(0.07f, 0.08f, 0.19f);
+        [Tooltip("Fourrure claire : poitrail, museau, joues, bout des pattes.")]
+        public Color furLight = new Color(0.72f, 0.75f, 0.86f);
+        [Tooltip("Couleur vive du bout de la queue, sous la flamme.")]
+        public Color furAccent = new Color(0.95f, 0.42f, 0.08f);
+        [Tooltip("Taille des plaques de fourrure qui tombent (plus grand = plaques plus petites).")]
+        [Range(1f, 12f)] public float furPatchScale = 4f;
+        [Tooltip("Étendue du poitrail clair sur le devant du torse (0 : aucun).")]
+        [Range(0f, 1f)] public float chestAmount = 0.55f;
+
+        [Header("Torse — points d'attache (repère du torse)")]
+        [Tooltip("Base du cou : la tête s'y accroche.")]
+        public Vector3 neckPoint = new Vector3(0.08f, 0.45f, 0f);
+        [Tooltip("Épaule côté caméra (z négatif). L'autre épaule est symétrique (z opposé).")]
+        public Vector3 shoulderPoint = new Vector3(0.07f, 0.24f, -0.22f);
+        [Tooltip("Naissance de la queue, en bas du dos.")]
+        public Vector3 tailPoint = new Vector3(-0.22f, -0.32f, 0f);
+        [Tooltip("Hanche côté caméra (z négatif), en bas et à l'arrière du torse : le haut de la cuisse y forme la fesse.\n" +
+                 "L'autre hanche est symétrique.")]
+        public Vector3 hipPoint = new Vector3(-0.06f, -0.4f, -0.15f);
+
+        [Header("Tête")]
+        [Tooltip("Demi-tailles du crâne (X avant, Y haut, Z largeur).")]
+        public Vector3 headRadii = new Vector3(0.23f, 0.2f, 0.2f);
+        [Tooltip("Centre du crâne par rapport à la base du cou.")]
+        public Vector3 headOffset = new Vector3(0.05f, 0.17f, 0f);
+        [Tooltip("Rotation de toute la tête (degrés). Z : lève / baisse le museau.")]
+        public Vector3 headRotation = Vector3.zero;
+        [Tooltip("Avancée du museau.")]
+        [Range(0f, 0.25f)] public float muzzleLength = 0.08f;
+        [Tooltip("Longueur des oreilles.")]
+        [Range(0f, 0.6f)] public float earLength = 0.3f;
+        [Tooltip("Rayon de la base des oreilles.")]
+        [Range(0.02f, 0.2f)] public float earWidth = 0.085f;
+        [Tooltip("Place des oreilles sur le crâne (X avant, Y haut, Z écart).")]
+        public Vector3 earPosition = new Vector3(-0.03f, 0.14f, 0.1f);
+        [Tooltip("Écartement des oreilles vers l'extérieur (degrés).")]
+        [Range(-30f, 60f)] public float earSpread = 14f;
+        [Tooltip("Inclinaison des oreilles vers l'arrière (degrés).")]
+        [Range(-30f, 60f)] public float earBack = 18f;
+        [Tooltip("Touffes de poils sur les joues (0 : aucune).")]
+        [Range(0f, 0.15f)] public float cheekTuft = 0.07f;
+        [Tooltip("Taille des yeux.")]
+        [Range(0.01f, 0.12f)] public float eyeSize = 0.05f;
+        [Tooltip("Place de l'œil côté caméra par rapport au centre du crâne (l'autre œil : z opposé).")]
+        public Vector3 eyePosition = new Vector3(0.15f, 0.03f, -0.12f);
+        [Tooltip("Couleur des yeux (lumineux).")]
+        public Color eyeColor = new Color(1f, 0.78f, 0.12f);
+
+        [Header("Bras")]
+        [Tooltip("Longueur épaule → poignet.")]
+        [Range(0.2f, 1.2f)] public float armLength = 0.55f;
+        [Tooltip("Épaisseur du bras.")]
+        [Range(0.02f, 0.15f)] public float armThickness = 0.055f;
+        [Tooltip("Longueur des griffes.")]
+        [Range(0f, 0.15f)] public float clawLength = 0.05f;
+        [Tooltip("Couleur des griffes.")]
+        public Color clawColor = new Color(0.85f, 0.83f, 0.78f);
+
+        [Header("Bras — silhouette")]
+        // Courbes : horizontal 0 = début du segment (épaule ou coude), 1 = fin (coude ou poignet).
+        // Épaisseur : multiplicateur de « armThickness ». Bosse : décalage du muscle, > 0 vers l'avant, < 0 vers l'arrière.
+        [Tooltip("Épaisseur du bras, de l'épaule (0) au coude (1).")]
+        public AnimationCurve upperArmWidth = new AnimationCurve(
+            new Keyframe(0f, 1.3f), new Keyframe(0.3f, 1.15f), new Keyframe(1f, 0.8f));
+        [Tooltip("Bosse du bras (biceps devant), de l'épaule (0) au coude (1).")]
+        public AnimationCurve upperArmBulge = new AnimationCurve(
+            new Keyframe(0f, 0f), new Keyframe(0.4f, 0.15f), new Keyframe(1f, 0f));
+        [Tooltip("Épaisseur de l'avant-bras, du coude (0) au poignet (1).")]
+        public AnimationCurve forearmWidth = new AnimationCurve(
+            new Keyframe(0f, 0.85f), new Keyframe(0.3f, 0.95f), new Keyframe(1f, 0.62f));
+        [Tooltip("Bosse de l'avant-bras (muscle derrière), du coude (0) au poignet (1).")]
+        public AnimationCurve forearmBulge = new AnimationCurve(
+            new Keyframe(0f, 0f), new Keyframe(0.3f, -0.12f), new Keyframe(1f, 0f));
+
+        [Header("Queue")]
+        [Tooltip("Longueur totale.")]
+        [Range(0.2f, 2.5f)] public float tailLength = 1f;
+        [Tooltip("Nombre de segments (plus = ondulation plus souple).")]
+        [Range(3, 12)] public int tailSegments = 7;
+        [Tooltip("Épaisseur à la base.")]
+        [Range(0.02f, 0.2f)] public float tailBaseRadius = 0.07f;
+        [Tooltip("Épaisseur au bout.")]
+        [Range(0.01f, 0.2f)] public float tailTipRadius = 0.05f;
+        [Tooltip("Taille de la flamme au bout (0 : pas de flamme).")]
+        [Range(0f, 0.5f)] public float flameSize = 0.2f;
+        [Tooltip("Couleur extérieure de la flamme.")]
+        public Color flameColor = new Color(1f, 0.42f, 0.05f);
+        [Tooltip("Cœur de la flamme.")]
+        public Color flameCoreColor = new Color(1f, 0.85f, 0.3f);
+
         [Header("Pattes")]
         [Tooltip("Longueur de la patte (1 = première version, jugée trop petite). CatBody suit automatiquement.")]
         [Range(0.5f, 4f)] public float legLength = 2f;
         [Tooltip("Épaisseur de la patte.")]
         [Range(0.5f, 4f)] public float legThickness = 1.7f;
-        [Tooltip("Couleur de la patte (bleu nuit).")]
+        [Tooltip("Couleur de la chair de la patte, sous la fourrure.")]
         public Color legColor = new Color(0.1f, 0.1f, 0.17f);
+        [Tooltip("Cuisse vue de face : 1 = ronde (cylindre), plus petit = aplatie, large de profil et fine de face.")]
+        [Range(0.35f, 1f)] public float thighDepth = 0.62f;
+        [Tooltip("Haut de la cuisse arrondi en dôme sur cette part de la cuisse (0 : coupé net).")]
+        [Range(0f, 0.5f)] public float thighDome = 0.28f;
+        [Tooltip("Place du talon entre le genou (0) et la base des doigts (1). Plus bas = métatarse plus long " +
+                 "(le segment talon → doigts, levé du sol) et tibia plus court.")]
+        [Range(0.15f, 0.7f)] public float heelHeight = 0.36f;
+        [Tooltip("Recul du talon vers l'arrière (en part de la longueur de patte) : plus grand = patte plus coudée.")]
+        [Range(0f, 0.15f)] public float heelBack = 0.065f;
+        [Tooltip("Demi-tailles des doigts posés au sol (phalanges) : X longueur vers l'avant, Y hauteur, Z largeur, en mètres.")]
+        public Vector3 pawSize = new Vector3(0.085f, 0.05f, 0.08f);
+        [Tooltip("Nombre de doigts au bout du pied.")]
+        [Range(0, 5)] public int toeCount = 4;
+        [Tooltip("Rayon des doigts.")]
+        [Range(0f, 0.08f)] public float toeSize = 0.038f;
+        [Tooltip("Bosse du genou (rotule), en part de l'épaisseur de la cuisse au genou.")]
+        [Range(0f, 1.5f)] public float kneeBump = 0.9f;
+        [Tooltip("Bosse du talon (jarret), en part de l'épaisseur du jarret.")]
+        [Range(0f, 1.5f)] public float heelBump = 1f;
+        [Tooltip("Hauteur où commence la « chaussette » claire, en part de la patte (0 = genou, 1 = cheville).")]
+        [Range(0f, 1f)] public float sockStart = 0.45f;
+
+        [Header("Pattes — silhouette")]
+        // Courbes : horizontal 0 = début du segment (hanche ou genou), 1 = fin (genou ou cheville).
+        // Épaisseur : multiplicateur (1 = épaisseur de base × legThickness). Bosse : > 0 vers l'avant, < 0 vers l'arrière.
+        [Tooltip("Épaisseur de la cuisse, du haut de la fesse (0, dans le torse) au genou (1).")]
+        public AnimationCurve thighWidth = new AnimationCurve(
+            new Keyframe(0f, 1.55f), new Keyframe(0.25f, 1.5f), new Keyframe(0.55f, 1.05f), new Keyframe(0.85f, 0.78f), new Keyframe(1f, 0.7f));
+        [Tooltip("Bosse de la cuisse : < 0 en haut = fesse en arrière, > 0 plus bas = muscle devant. Du haut (0) au genou (1).")]
+        public AnimationCurve thighBulge = new AnimationCurve(
+            new Keyframe(0f, -0.25f), new Keyframe(0.25f, 0f), new Keyframe(0.5f, 0.15f), new Keyframe(1f, 0f));
+        [Tooltip("Épaisseur du bas de patte, du genou (0) à la base des doigts (1). Creux à « heelHeight » : le talon.")]
+        public AnimationCurve shinWidth = new AnimationCurve(
+            new Keyframe(0f, 1f), new Keyframe(0.16f, 1f), new Keyframe(0.36f, 0.72f), new Keyframe(0.8f, 0.66f), new Keyframe(1f, 0.85f));
+        [Tooltip("Bosse du jarret (mollet derrière), du genou (0) à la cheville (1).")]
+        public AnimationCurve shinBulge = new AnimationCurve(
+            new Keyframe(0f, 0f), new Keyframe(0.14f, -0.22f), new Keyframe(0.36f, 0f), new Keyframe(1f, 0f));
 
         // Valeurs au dernier passage : OnValidate est aussi appelé au chargement, sans rien changer.
         // On ne reconstruit que si une valeur a vraiment bougé depuis.

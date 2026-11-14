@@ -9,7 +9,8 @@ namespace ParryEverything.Player
     // Âme : chaque coup la consume (elle rétrécit), elle se régénère après un moment sans coup. Consumée = mort.
     // Corps : la chair du Gardien enferme l'âme (boule qui roule), puis des pattes y sont cousues (debout).
     // Chaque membre a sa vie ; tant que la chair tient, les coups frappent le membre le plus proche, pas l'âme.
-    // Pattes perdues : retour à la boule. Chair éclatée : les pattes tombent avec, retour à l'âme (vie pleine).
+    // Pattes perdues : retour à la boule. Chair éclatée : tous les membres cousus tombent avec, retour à l'âme (vie pleine).
+    // Bras, tête et queue n'ont pas encore de capacité (GAME_DESIGN 6.3, ⚠️) : ils sont visuels pour l'instant.
     // Un membre arraché tombe au sol (LimbPickup) ; ramassé, il peut être recousu (la chair d'abord).
     public class PlayerBody : MonoBehaviour
     {
@@ -126,12 +127,12 @@ namespace ParryEverything.Player
             OnLimbLost?.Invoke(limb);
             if (limb.Kind == LimbKind.Flesh)
             {
-                // La chair éclate : les pattes cousues dessus tombent avec elle
-                foreach (Limb leg in limbs)
+                // La chair éclate : tout ce qui est cousu dessus tombe avec elle
+                foreach (Limb sewn in limbs)
                 {
-                    if (leg.Kind != LimbKind.Leg || leg.IsTorn) continue;
-                    leg.Damage(leg.Life);
-                    OnLimbLost?.Invoke(leg);
+                    if (sewn.Kind == LimbKind.Flesh || sewn.IsTorn) continue;
+                    sewn.Damage(sewn.Life);
+                    OnLimbLost?.Invoke(sewn);
                 }
                 // Retour à l'âme, à vie pleine
                 soul = soulMax;
@@ -162,7 +163,7 @@ namespace ParryEverything.Player
             if (limb != null && limbs.Contains(limb)) limb.PickUp();
         }
 
-        // Peut-on recoudre ce membre maintenant ? (une patte se coud sur la chair : il faut la chair d'abord)
+        // Peut-on recoudre ce membre maintenant ? (tout se coud sur la chair : il faut la chair d'abord)
         public bool CanSew(Limb limb)
         {
             if (limb == null || !limb.IsPocketed || !limbs.Contains(limb)) return false;
@@ -205,7 +206,7 @@ namespace ParryEverything.Player
             NotifyForm();
         }
 
-        // Coud de nouveaux membres sur la chair (pattes de l'âme marchande). Sans chair, rien ne tient.
+        // Coud de nouveaux membres sur la chair (pattes, bras, tête, queue). Sans chair, rien ne tient.
         public bool AttachLimbs(IEnumerable<Limb> newLimbs)
         {
             if (newLimbs == null) return false;
@@ -213,7 +214,7 @@ namespace ParryEverything.Player
             foreach (Limb limb in newLimbs)
             {
                 if (limb == null || limbs.Contains(limb)) continue;
-                if (limb.Kind == LimbKind.Leg && !HasBody) continue;
+                if (limb.Kind != LimbKind.Flesh && !HasBody) continue;
                 limbs.Add(limb);
                 any = true;
             }
@@ -221,7 +222,7 @@ namespace ParryEverything.Player
             return any;
         }
 
-        // Coud un membre (la chair, ou une patte si la chair tient)
+        // Coud un membre (la chair, ou un autre membre si la chair tient)
         public bool AttachLimb(Limb limb)
         {
             return AttachLimbs(new[] { limb });

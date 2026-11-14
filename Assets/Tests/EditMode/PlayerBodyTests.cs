@@ -235,5 +235,62 @@ namespace ParryEverything.Tests
             Assert.AreEqual(25f, body.Limbs[1].Life, 1e-4f);
             Assert.AreEqual(body.Limbs[1].Anchor, saved[1].anchor);
         }
+
+        // ---------- Chat complet (bras, tête, queue) ----------
+
+        // Chair + 2 pattes + 2 bras + tête + queue
+        private void GiveFullCat()
+        {
+            GiveBiped();
+            body.AttachLimbs(Limb.CatArms(30f));
+            body.AttachLimb(Limb.CatHead(30f));
+            body.AttachLimb(Limb.CatTail(30f));
+        }
+
+        [Test]
+        public void ArmsHeadTail_NeedFlesh()
+        {
+            Assert.IsFalse(body.AttachLimb(Limb.CatHead(30f)), "Sans chair, la tête ne tient pas");
+            Assert.IsFalse(body.AttachLimbs(Limb.CatArms(30f)));
+
+            GiveFullCat();
+            Assert.AreEqual(7, body.Limbs.Count);
+            Assert.AreEqual(PlayerForm.Biped, body.Form);
+        }
+
+        [Test]
+        public void FleshBurst_DropsEverySewnLimb()
+        {
+            GiveFullCat();
+            int lost = 0;
+            body.OnLimbLost += _ => lost++;
+
+            body.ApplyDamage(500f, body.FleshLimb);
+
+            Assert.AreEqual(PlayerForm.Soul, body.Form);
+            Assert.AreEqual(7, lost, "La chair et les 6 membres cousus dessus tombent");
+            foreach (Limb limb in body.Limbs) Assert.IsTrue(limb.IsTorn);
+        }
+
+        [Test]
+        public void NearestLimb_HeadOnTop()
+        {
+            GiveFullCat();
+            Vector3 top = body.transform.position + new Vector3(0.1f, 1.5f, 0f);
+            Assert.AreEqual(LimbKind.Head, body.NearestLimb(top, 1f).Kind);
+        }
+
+        [Test]
+        public void SaveLoad_KeepsNewLimbKinds()
+        {
+            GiveFullCat();
+            var saved = body.SaveLimbs();
+            body.RemoveAllLimbs();
+            body.LoadLimbs(saved);
+
+            Assert.AreEqual(7, body.Limbs.Count);
+            Assert.AreEqual(LimbKind.Tail, body.Limbs[6].Kind);
+            Assert.AreEqual(LimbKind.Head, body.Limbs[5].Kind);
+        }
     }
 }

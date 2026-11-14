@@ -40,8 +40,10 @@ namespace ParryEverything.Editor
             AddSphere(subdivisions, d => center + Vector3.Scale(d, radii), _ => color, submesh);
         }
 
-        // Tube le long d'une ligne de points (rayon par point), fermé aux deux bouts
-        public void AddLoft(IList<Vector3> points, IList<float> radii, int segments, Func<int, float, Color> paint, int submesh = 0)
+        // Tube le long d'une ligne de points (rayon par point), fermé aux deux bouts.
+        // depthScale (facultatif) : par point, multiplie le rayon en profondeur (Z) → section ovale (pied large et plat)
+        public void AddLoft(IList<Vector3> points, IList<float> radii, int segments, Func<int, float, Color> paint, int submesh = 0,
+                            IList<float> depthScale = null)
         {
             int n = points.Count;
             int start = vertices.Count;
@@ -57,7 +59,8 @@ namespace ParryEverything.Editor
                 for (int s = 0; s < segments; s++)
                 {
                     float a = s * Mathf.PI * 2f / segments;
-                    vertices.Add(points[i] + (side * Mathf.Cos(a) + depth * Mathf.Sin(a)) * radii[i]);
+                    float dz = depthScale != null ? depthScale[i] : 1f;
+                    vertices.Add(points[i] + (side * Mathf.Cos(a) + depth * (Mathf.Sin(a) * dz)) * radii[i]);
                     colors.Add(paint(i, a));
                 }
             }

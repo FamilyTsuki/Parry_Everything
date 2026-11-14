@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace ParryEverything.Player
 {
-    // Un membre du corps : la chair (autour de l'âme) ou une patte (cousue sur la chair).
+    // Un membre du corps : la chair (autour de l'âme, le torse) ou un membre cousu dessus (patte, bras, tête, queue).
     // Sa propre vie, un effet possible. Arraché quand sa vie tombe à 0.
     // Un membre arraché reste au sol (LimbPickup) ; ramassé, il est « en poche » jusqu'à la recouture.
     [Serializable]
@@ -57,6 +57,28 @@ namespace ParryEverything.Player
                 new Limb("patte proche", life, new Vector3(0.2f, -0.05f, -0.2f)),
                 new Limb("patte loin", life, new Vector3(-0.2f, -0.05f, 0.2f)),
             };
+        }
+
+        // Les 2 bras, cousus en haut du torse (devant et derrière, comme les pattes)
+        public static Limb[] CatArms(float life)
+        {
+            return new[]
+            {
+                new Limb("bras proche", life, new Vector3(0.15f, 1.0f, -0.18f), LimbKind.Arm),
+                new Limb("bras loin", life, new Vector3(0.05f, 1.0f, 0.18f), LimbKind.Arm),
+            };
+        }
+
+        // La tête, au sommet du torse
+        public static Limb CatHead(float life)
+        {
+            return new Limb("tête", life, new Vector3(0.12f, 1.45f, 0f), LimbKind.Head);
+        }
+
+        // La queue, cousue en bas du dos
+        public static Limb CatTail(float life)
+        {
+            return new Limb("queue", life, new Vector3(-0.35f, 0.45f, 0f), LimbKind.Tail);
         }
 
         // Position du point d'attache dans le monde
