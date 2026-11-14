@@ -47,4 +47,4 @@ Assets/
   - `SaveSystem` / `SaveData` pour la sauvegarde (nouveau champ : valeur par défaut sensée ; changement de sens : monter `CurrentVersion` + migration).
 - Commentaires en français, identifiants en anglais.
 - Décor : vrais objets dans la scène / prefabs, éditables à la main. Pas de génération du décor par script.
-- Modèles du chat : générés par `Parry Everything > Reconstruire les modèles du chat` (Editor/CatModelBuilder) ; modifier la forme dans ce script puis relancer le menu (les prefabs et matériaux existants sont mis à jour, pas recréés).
+- Modèles du chat : générés par Editor/CatModelBuilder. Forme, placement, couleurs : asset `Meshes/Player/CatModelSettings.asset` (menu `Parry Everything > Modèle du chat : réglages`) ; chaque modification reconstruit les meshes et prefabs en place. Les repères de la patte sont écrits sur le prefab (`CatLegRig`) et lus par CatBody. Placement en jeu : composant CatBody.

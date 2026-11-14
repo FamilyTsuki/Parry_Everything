@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca3dd075ed75277cea66a32c35e8f5eb, type: 3}
+  m_Name: CatModelSettings
+  m_EditorClassIdentifier: ParryEverything.Editor::ParryEverything.Editor.CatModelSettings
+  autoRebuild: 1
+  bodyRadii: {x: 0.29, y: 0.56, z: 0.28}
+  bodyTaper: 0.14
+  bodyFlank: 0.75
+  bodyBend: 0.03
+  bodyDetail: 4
+  bodyOffset: {x: 0, y: -0.03, z: 0}
+  bodyRotation: {x: 0, y: 0, z: 0}
+  bodyScale: {x: 1, y: 1, z: 1}
+  lumpiness: 0.06
+  lumpCount: 13
+  patchCount: 10
+  seed: 3
+  seamWidth: 0.06
+  seamDepth: 0.055
+  fleshPalette:
+  - {r: 0.36, g: 0.08, b: 0.09, a: 1}
+  - {r: 0.24, g: 0.07, b: 0.12, a: 1}
+  - {r: 0.42, g: 0.16, b: 0.12, a: 1}
+  - {r: 0.19, g: 0.09, b: 0.13, a: 1}
+  - {r: 0.3, g: 0.12, b: 0.1, a: 1}
+  - {r: 0.5, g: 0.2, b: 0.17, a: 1}
+  - {r: 0.52, g: 0.4, b: 0.32, a: 1}
+  - {r: 0.14, g: 0.11, b: 0.17, a: 1}
+  - {r: 0.66, g: 0.2, b: 0.18, a: 1}
+  crustColor: {r: 0.1, g: 0.03, b: 0.03, a: 1}
+  stitchColor: {r: 0.86, g: 0.8, b: 0.68, a: 0}
+  veinColor: {r: 0.62, g: 0.12, b: 0.12, a: 1}
+  legLength: 2
+  legThickness: 1.7
+  legColor: {r: 0.1, g: 0.1, b: 0.17, a: 1}

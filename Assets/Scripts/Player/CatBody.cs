@@ -28,9 +28,8 @@ namespace ParryEverything.Player
         [SerializeField] private float morphSpeed = 3f;           // boule ↔ debout (par seconde)
         [SerializeField] private float turnSpeed = 900f;          // demi-tour du corps (degrés par seconde)
 
-        [Header("Pattes : géométrie du modèle CatLeg")]
-        [SerializeField] private Vector2 thighVector = new Vector2(0.14f, -0.36f);  // hanche → genou
-        [SerializeField] private Vector2 shinVector = new Vector2(0f, -0.47f);      // genou → cheville
+        [Header("Pattes")]
+        // Longueurs cuisse / jarret : lues sur le prefab CatLeg (CatLegRig), réglées dans CatModelSettings
         [SerializeField] private float ankleHeight = 0.07f;       // cheville au-dessus du sol (épaisseur de la patte)
 
         [Header("Marche")]
@@ -99,6 +98,7 @@ namespace ParryEverything.Player
         private PlayerController controller;
         private CatSoul soul;
         private Rigidbody rb;
+        private CatLegRig legRig;
         private readonly Dictionary<Limb, LimbView> views = new Dictionary<Limb, LimbView>();
         private readonly GeneratedObjects generated = new GeneratedObjects();
         private MaterialPropertyBlock block;
@@ -333,21 +333,27 @@ namespace ParryEverything.Player
             target.x += shake * 0.1f;
             SolveLeg(target, out float thighAngle, out float shinAngle);
 
-            float restThigh = Mathf.Atan2(thighVector.y, thighVector.x) * Mathf.Rad2Deg;
-            float restShin = Mathf.Atan2(shinVector.y, shinVector.x) * Mathf.Rad2Deg;
+            Vector2 thigh = ThighVector, shin = ShinVector;
+            float restThigh = Mathf.Atan2(thigh.y, thigh.x) * Mathf.Rad2Deg;
+            float restShin = Mathf.Atan2(shin.y, shin.x) * Mathf.Rad2Deg;
             float hipRot = thighAngle - restThigh;
             float kneeRot = shinAngle - restShin - hipRot;
 
             // Écartée vers l'extérieur, du côté de son attache (devant ou derrière la boule)
             float splay = -legSplay * Mathf.Sign(limb.Anchor.z == 0f ? 1f : limb.Anchor.z);   // rotation autour de X : négatif = pied vers +Z
             view.root.rotation = Quaternion.Euler(splay, 0f, hipRot * facing);
-            if (view.knee != null) view.knee.localRotation = Quaternion.Euler(0f, 0f, kneeRot);
+            if (view.knee != null)
+            {
+                // Genou replacé à chaque image : suit la longueur de patte même si le modèle est reconstruit en Play
+                view.knee.localPosition = thigh;
+                view.knee.localRotation = Quaternion.Euler(0f, 0f, kneeRot);
+            }
         }
 
         // Position du pied sur le cycle : appui (recule à la vitesse du sol) puis retour en arc vers l'avant
         private void UpdateFoot(LimbView view, Vector3 hip, float facing, bool grounded, Vector3 vel, float dt)
         {
-            float legLength = thighVector.magnitude + shinVector.magnitude;
+            float legLength = ThighVector.magnitude + ShinVector.magnitude;
 
             // En l'air : pattes repliées sous le corps
             if (!grounded || standUp < 0.5f)
@@ -407,11 +413,24 @@ namespace ParryEverything.Player
             return y;
         }
 
+        // Repères de la patte, lus sur le prefab (relus si le prefab est reconstruit pendant le Play)
+        private CatLegRig LegRig
+        {
+            get
+            {
+                if (legRig == null && legPrefab != null) legRig = legPrefab.GetComponent<CatLegRig>();
+                return legRig;
+            }
+        }
+
+        private Vector2 ThighVector => LegRig != null ? LegRig.Thigh : new Vector2(0.14f, -0.36f);   // hanche → genou
+        private Vector2 ShinVector => LegRig != null ? LegRig.Shin : new Vector2(0f, -0.47f);        // genou → cheville
+
         // Deux segments (cuisse, jarret) de la hanche (origine) vers la cheville ; genou vers l'avant.
         // Renvoie les angles (degrés) de la cuisse et du jarret dans l'espace « regarde à droite ».
         private void SolveLeg(Vector2 target, out float thighAngle, out float shinAngle)
         {
-            float l1 = thighVector.magnitude, l2 = shinVector.magnitude;
+            float l1 = ThighVector.magnitude, l2 = ShinVector.magnitude;
             float d = Mathf.Clamp(target.magnitude, Mathf.Abs(l1 - l2) + 0.001f, l1 + l2 - 0.001f);
             float toTarget = Mathf.Atan2(target.y, target.x);
             float cosA = Mathf.Clamp((l1 * l1 + d * d - l2 * l2) / (2f * l1 * d), -1f, 1f);
