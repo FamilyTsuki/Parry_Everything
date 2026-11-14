@@ -8,7 +8,9 @@ namespace ParryEverything.Enemies
 {
     // Ennemi de mêlée : à intervalle régulier, arme son coup puis balaie un arc de cercle devant lui.
     // Paré : l'arme repart en arrière et l'ennemi reste étourdi.
-    public class MeleeEnemy : MonoBehaviour
+    // Étourdi, on peut absorber son âme (parer à son contact) : son corps redevient chair inerte.
+    // S'éloigner sans l'absorber = l'épargner (compté une fois, BehaviorLedger).
+    public class MeleeEnemy : MonoBehaviour, ISoulVessel
     {
         [Header("Attaque")]
         // Objet "attaque" (enfant de l'ennemi) : sert de zone de collision et de visuel
@@ -26,6 +28,10 @@ namespace ParryEverything.Enemies
         [SerializeField] private float stunDuration = 1.0f;         // ennemi étourdi : pas d'attaque pendant ce temps
         [SerializeField] private float parryFlashDuration = 0.08f;  // flash blanc de l'arme
 
+        [Header("Âme")]
+        [SerializeField] private float spareDistance = 14f;         // étourdi puis laissé derrière : épargné
+        [SerializeField] private Color fleshColor = new Color(0.22f, 0.06f, 0.06f); // chair inerte après absorption
+
         [Header("Modèle")]
         // Modèle 3D de l'ennemi (ex: FreeLichPolyart), instancié comme enfant au démarrage
         [SerializeField] private GameObject modelPrefab;
@@ -42,6 +48,53 @@ namespace ParryEverything.Enemies
         private PlayerController target;
         private Transform model;
         private Animator animator;
+        private bool stunned;
+        private bool wasStunned;     // a été étourdi au moins une fois
+        private bool absorbed;
+        private bool spareCounted;
+
+        public bool CanAbsorb => stunned && !absorbed;
+        public Vector3 Position => transform.position;
+        public bool IsAbsorbed => absorbed;
+
+        // Âme absorbée : plus d'attaque, le corps s'affaisse et devient chair inerte
+        public void Absorb()
+        {
+            if (absorbed) return;
+            absorbed = true;
+            stunned = false;
+            StopAllCoroutines();
+            attack.SetActive(false);
+            if (animator != null) animator.enabled = false;
+            foreach (Renderer r in GetComponentsInChildren<Renderer>())
+            {
+                foreach (Material m in r.materials)
+                {
+                    if (m.HasProperty("_Color")) m.color = fleshColor;
+                }
+            }
+            Rigidbody body = GetComponent<Rigidbody>();
+            if (body != null) body.isKinematic = true;
+            foreach (Collider c in GetComponents<Collider>()) c.enabled = false;
+            StartCoroutine(Collapse());
+        }
+
+        private IEnumerator Collapse()
+        {
+            Transform t = model != null ? model : transform;
+            Quaternion from = t.rotation;
+            Quaternion to = from * Quaternion.Euler(0f, 0f, 80f);
+            Vector3 start = transform.position;
+            float k = 0f;
+            while (k < 1f)
+            {
+                k += Time.deltaTime / 0.6f;
+                float e = 1f - (1f - k) * (1f - k);
+                t.rotation = Quaternion.Slerp(from, to, e);
+                transform.position = start + Vector3.down * 0.35f * e;
+                yield return null;
+            }
+        }
 
         private void Start()
         {
@@ -61,6 +114,15 @@ namespace ParryEverything.Enemies
 
         private void Update()
         {
+            if (absorbed) return;
+            // Étourdi une fois, puis laissé derrière lui : épargné
+            if (wasStunned && !spareCounted && target != null &&
+                Mathf.Abs(target.transform.position.x - transform.position.x) > spareDistance)
+            {
+                spareCounted = true;
+                BehaviorLedger.AddEnemySpared();
+            }
+
             // Le modèle regarde vers le joueur (axe X du jeu 2D)
             if (model != null && target != null)
             {
@@ -214,7 +276,10 @@ namespace ParryEverything.Enemies
             }
             attack.SetActive(false);
 
+            stunned = true;
+            wasStunned = true;
             yield return new WaitForSeconds(stunDuration);
+            stunned = false;
         }
 
         private void PlaceAttack(float angle)

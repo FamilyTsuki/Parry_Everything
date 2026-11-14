@@ -1,10 +1,13 @@
+using ParryEverything.Core;
+using ParryEverything.Player;
 using UnityEngine;
 
 namespace ParryEverything.Environment
 {
     // Âme damnée qui erre dans la zone, loin du joueur comme près de lui :
     // elle marche courbée, s'arrête, s'agenouille un long moment, ou s'efface dans la brume
-    // pour réapparaître ailleurs. Rien ne dépend de la caméra ni du joueur.
+    // pour réapparaître ailleurs. Celles qui errent sur le chemin du joueur (profondeur proche de 0)
+    // peuvent être bousculées : elles s'effacent, et c'est compté (BehaviorLedger).
     public class WanderingSoul : MonoBehaviour
     {
         private enum State { Walk, Pause, Kneel, Fade }
@@ -15,6 +18,12 @@ namespace ParryEverything.Environment
         [SerializeField] private Vector2 depthRange = new Vector2(4f, 12f);
         [SerializeField] private Vector2 walkSpeed = new Vector2(0.18f, 0.4f);
         [SerializeField] private float alpha = 0.22f;
+
+        [Header("Sur le chemin du joueur")]
+        [SerializeField] private float bumpRadius = 0.6f;     // distance horizontale de bousculade
+        [SerializeField] private float pathDepth = 1f;         // au-delà de cette profondeur, le joueur ne la croise pas
+
+        private PlayerBody player;
 
         private State state;
         private float stateLeft;
@@ -41,6 +50,7 @@ namespace ParryEverything.Environment
         {
             float dt = Time.deltaTime;
             stateLeft -= dt;
+            CheckBump();
 
             switch (state)
             {
@@ -61,6 +71,25 @@ namespace ParryEverything.Environment
 
             kneel = Mathf.MoveTowards(kneel, state == State.Kneel ? 1f : 0f, dt * 0.4f);
             ApplyPose();
+        }
+
+        // Le joueur traverse l'âme au lieu de la contourner : elle s'efface
+        private void CheckBump()
+        {
+            if (state == State.Fade || fade < 0.5f || Mathf.Abs(transform.position.z) > pathDepth) return;
+            if (player == null)
+            {
+                player = FindFirstObjectByType<PlayerBody>();
+                if (player == null) return;
+            }
+            Vector3 d = player.transform.position - transform.position;
+            if (Mathf.Abs(d.x) > bumpRadius || d.y < -0.6f || d.y > 2f) return;
+
+            BehaviorLedger.AddWanderingSoulBumped();
+            ParticleBurst.Spawn("SoulBumped", transform.position + Vector3.up * 0.8f, new Color(0.7f, 0.8f, 1f, 0.6f), 30,
+                lifetime: new Vector2(0.5f, 1.2f), speed: new Vector2(0.5f, 2f), size: new Vector2(0.05f, 0.14f),
+                gravity: -0.2f, radius: 0.4f);
+            Enter(State.Fade);
         }
 
         private void EnterNext()

@@ -1,6 +1,7 @@
 # Parry Everything — conventions du projet
 
 Unity 6, jeu 2D en 3D (axe X jouable). Scène principale : `Assets/Scenes/Main.unity`.
+Scène `Assets/Scenes/AnimationLab.unity` : visionneuse des animations (chat + boss en `labMode`, panneau `Lab/AnimationLab`, caméra orbitale `Lab/LabCamera`). Nouveau geste du boss : l'ajouter à `HellGuardian.LabMove` et au panneau.
 
 ## Arborescence
 
@@ -14,11 +15,12 @@ Assets/
     Boss/            HellGuardian, BossProjectile
     Audio/           BossMusic, AmbientWind (synthèse temps réel)
     Environment/     petits comportements de décor (FloatingBob, CameraParallax)
-    Editor/          outils éditeur uniquement (AutoRefreshWatcher)
+    Lab/             scène AnimationLab (AnimationLab, LabCamera)
+    Editor/          outils éditeur uniquement (AutoRefreshWatcher, CatModelBuilder + MeshDraft : modèles du chat)
   Materials/         matériaux (.mat), nommés selon leur usage (Environment/ : décor)
   Textures/          textures (Environment/ : particules de neige/brume, dégradé du ciel)
-  Meshes/            meshes sauvegardés (Environment/SoulRealmMeshes.asset)
-  Prefabs/           prefabs (Environment/SoulRealm.prefab = décor complet)
+  Meshes/            meshes sauvegardés (Environment/SoulRealmMeshes.asset ; Player/CatModels.asset = corps du chat)
+  Prefabs/           prefabs (Environment/SoulRealm.prefab = décor complet ; Player/ = FleshBall, FleshBody, CatLeg)
   PhysicsMaterials/  physic materials
   Resources/Shaders/ shaders chargés par Shader.Find (doivent rester dans Resources)
   ThirdParty/        assets externes (Asset Store) — ne pas modifier
@@ -37,6 +39,12 @@ Assets/
   - `MaterialFactory.Unlit/Lit` au lieu de `new Material(Shader.Find(...))` ;
   - `GeneratedObjects` pour les objets créés en code (HideAndDontSave + destruction groupée) ;
   - `GameCamera.ShakeMain(...)` / `GameCamera.Main` pour la caméra ;
-  - `GuiDraw` pour les HUD OnGUI.
+  - `GuiDraw` pour les HUD OnGUI ;
+  - `GameInput.Pressed/Held(GameAction.X)` pour les entrées, jamais `Input.GetKey` (nouvelle touche : l'ajouter dans `GameAction` et `GameInput`) ;
+  - `TimeControl.SetEffectScale(...)` pour arrêts du temps et ralentis, jamais `Time.timeScale` directement (sinon la pause casse) ;
+  - `GameFlow.IsPlaying` pour savoir si le joueur peut agir ; `GameFlow.Instance.SaveAtSanctuary(...)` / `BossDefeated(...)` pour sauvegarder la progression ;
+  - `GameSession` pour l'état de la partie qui survit au rechargement (boss vaincus, membres, sanctuaire) : un objet de la scène qui dépend de la progression le lit dans son `Start` ;
+  - `SaveSystem` / `SaveData` pour la sauvegarde (nouveau champ : valeur par défaut sensée ; changement de sens : monter `CurrentVersion` + migration).
 - Commentaires en français, identifiants en anglais.
 - Décor : vrais objets dans la scène / prefabs, éditables à la main. Pas de génération du décor par script.
+- Modèles du chat : générés par `Parry Everything > Reconstruire les modèles du chat` (Editor/CatModelBuilder) ; modifier la forme dans ce script puis relancer le menu (les prefabs et matériaux existants sont mis à jour, pas recréés).

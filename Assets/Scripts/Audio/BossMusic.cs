@@ -26,6 +26,10 @@ namespace ParryEverything.Audio
         [SerializeField] private float finalBpm = 132f;         // phase V
         [SerializeField] private bool reverb = true;            // écho de grotte
 
+        [Header("Au loin (sanctuaire)")]
+        [Range(0f, 1f)] [SerializeField] private float distantVolume = 0.3f;
+        [SerializeField] private float distantCutoff = 900f;    // son étouffé, comme derrière un mur
+
         [Header("Références (trouvées automatiquement si vides)")]
         [SerializeField] private HellGuardian boss;
         [SerializeField] private PlayerController hero;
@@ -47,6 +51,20 @@ namespace ParryEverything.Audio
         // État du thread principal
         private bool parried;
         private bool wasActive;
+        private AudioLowPassFilter distantFilter;
+
+        // Réglages lus par le thread audio
+        private volatile float transpose;     // demi-tons, appliqué aux nouvelles notes
+        private volatile float outGain = 1f;
+
+        // Thème joué au loin, étouffé (le joueur est au sanctuaire, avant le combat)
+        public bool Distant { get; set; }
+        // Transposition en demi-tons (parades parfaites enchaînées : la musique baisse)
+        public float Transpose
+        {
+            get => transpose;
+            set => transpose = value;
+        }
 
         // ---------- Synthèse ----------
         private const int T_BRASS = 0, T_STRING = 1, T_HAT = 2, T_TAIKO = 3, T_SNARE = 4, T_CHOIR = 5, T_PAD = 6, T_CYMBAL = 7, T_SWELL = 8, T_BOOM = 9;
@@ -118,6 +136,9 @@ namespace ParryEverything.Audio
                 rev.dryLevel = 0f;
                 rev.room = -1200f;
             }
+            // Ajouté en dernier : étouffe tout le reste quand la musique est jouée au loin
+            distantFilter = gameObject.AddComponent<AudioLowPassFilter>();
+            distantFilter.cutoffFrequency = 22000f;
             PlayerController.OnParry += HandleParry;
         }
 
@@ -146,6 +167,16 @@ namespace ParryEverything.Audio
             // Boss mort (ou détruit) après le combat : victoire
             if (wasActive && (boss == null || boss.IsDead)) victory = true;
 
+            // Avant le combat, au sanctuaire : le thème s'entend au loin
+            bool distantNow = Distant && !active && !wasActive;
+            if (!active && !wasActive) playing = distantNow;
+            float k = 1f - Mathf.Exp(-2f * Time.unscaledDeltaTime);
+            outGain = Mathf.Lerp(outGain, distantNow ? distantVolume : 1f, k);
+            if (distantFilter != null)
+            {
+                distantFilter.cutoffFrequency = Mathf.Lerp(distantFilter.cutoffFrequency, distantNow ? distantCutoff : 22000f, k);
+            }
+
             int ph = phase;
             // À la victoire, le combat continue jusqu'au début de la cadence, puis s'efface
             bool on = playing && !cadenceStarted;
@@ -161,8 +192,8 @@ namespace ParryEverything.Audio
 
             // Vie du joueur : tension sous 55 %, cœur sous 30 %
             float ratio = hero != null ? hero.HealthRatio : 1f;
-            layerRequest[L_TENSION] = on && !victory ? Mathf.Clamp01((0.55f - ratio) / 0.35f) : 0f;
-            layerRequest[L_HEART] = on && ratio > 0f ? Mathf.Clamp01((0.3f - ratio) / 0.25f) : 0f;
+            layerRequest[L_TENSION] = on && !victory && !distantNow ? Mathf.Clamp01((0.55f - ratio) / 0.35f) : 0f;
+            layerRequest[L_HEART] = on && !distantNow && ratio > 0f ? Mathf.Clamp01((0.3f - ratio) / 0.25f) : 0f;
 
             // Ralentissement final pendant la cadence
             bpmTarget = cadenceStarted ? baseBpm * 0.8f : Mathf.Lerp(baseBpm, finalBpm, ph / 4f);
@@ -197,7 +228,7 @@ namespace ParryEverything.Audio
                 lastStep = -1;
             }
             float dt = 1f / sampleRate;
-            float vol = masterVolume;
+            float vol = masterVolume * outGain;
 
             for (int f = 0; f < frames; f++)
             {
@@ -477,7 +508,7 @@ namespace ParryEverything.Audio
             v.on = true;
             v.type = type;
             v.layer = layer;
-            v.freq = 440f * Mathf.Pow(2f, (midi - 69) / 12f);
+            v.freq = 440f * Mathf.Pow(2f, (midi - 69 + transpose) / 12f);
             v.amp = amp;
             v.attack = Mathf.Max(attack, 0.001f);
             v.hold = Mathf.Max(hold, 0f);

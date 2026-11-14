@@ -159,7 +159,8 @@ Questions ouvertes :
 | Étape | Gain | Nouvelle vulnérabilité | Source |
 |---|---|---|---|
 | Âme (départ) | flotte | — | — |
-| Pattes *(proposé)* | marcher, courir, parade de chute | dégâts de chute | Gardien des Enfers (zone 1) |
+| Chair *(validé)* | la chair du Gardien s'agglutine autour de l'âme : boule lourde qui roule, encaisse les coups à la place de l'âme | ne vole plus | Gardien des Enfers (zone 1) |
+| 2 pattes *(validé)* | la boule de chair portée par 2 grandes pattes de chat : marcher, courir, parade de chute | dégâts de chute | l'âme marchande, contre un morceau de chair du Gardien (zone 1) |
 | Queue *(proposé)* | équilibre, saut sur les murs, mouvement en l'air | ⚠️ | l'Arbre pendu (zone 2) |
 | Yeux *(validé)* — ou griffes *(possible)* | yeux : lire les attaques plus tôt (signal de parade plus visible), voir les murs fragiles. Griffes : contre-attaque juste après une parade parfaite | yeux : aveuglé par les flashs et les éclats | le Juge (zone 3) |
 | Cœur *(proposé)* | parade rapide (ouvre la parade du temps) ; corps complet | ⚠️ | Tour de l'Horloge (zone 5) |
@@ -345,8 +346,8 @@ Bonnes bases, mais pas encore satisfaisantes : à retravailler.
 
 | | Âme | Corps (4 pattes) |
 |---|---|---|
-| Vitesse de marche | 3,5 | 5 |
-| Course (Maj) | non | 8 |
+| Vitesse de marche | 3,5 | 3,5 *(5 jugé trop rapide pour la taille des pattes)* |
+| Course (Maj) | non | 6 |
 | Saut | lent et flottant, chute plafonnée à 6 | saut actuel, chute plafonnée à 18 |
 | Dégâts de chute | jamais | si la chute dépasse 4 m |
 | Parade : fenêtre / attente si ratée | 0,35 s / 0,5 s | 0,3 s / 0,3 s |
@@ -466,6 +467,9 @@ Respecte les conventions de `AGENTS.md`.
 - 2026-11-13 — Achever un ennemi étourdi = absorber son âme ; son corps redevient chair inerte.
 - 2026-11-13 — L'âme entièrement consumée = mort du chat.
 - 2026-11-13 — Forme finale : un chat debout sur 2 pattes, guerrier (référence dans References/).
+- 2026-11-13 — Après la mort du Gardien, la zone 1 se rallume (braises, lumière chaude) ; elle ne s'effondre pas.
+- 2026-11-13 — Évolution de la zone 1 : le Gardien vaincu laisse un tas de chair qui s'agglutine autour de l'âme (boule qui roule, vie 80) ; l'âme marchande, au bord de la descente, fabrique 2 pattes contre un morceau de cette chair, qu'il faut revenir arracher au tas. Debout : la boule de chair (l'âme toujours entièrement recouverte) portée par 2 grandes pattes. Une patte : il sautille ; aucune : retour à la boule ; chair éclatée : retour à l'âme. Captures dans References/Evolution/.
+- 2026-11-13 — Vision du meurtre : 3 plans figés en ombres chinoises sur fond rouge, sans texte, fondus blancs — l'enfant recroquevillé (une ombre s'approche par la porte), le père qui lève le bras (bouteille à la main), le chat qui feule devant l'enfant.
 
 ## 11. Idées en vrac
 

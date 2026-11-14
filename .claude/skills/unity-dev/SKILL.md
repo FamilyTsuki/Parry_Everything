@@ -39,4 +39,6 @@ description: Workflow de dev Unity pour Parry Everything — à charger avant to
 
 - Le hook rtk réécrit les commandes Bash ; en mode auto, chaque commande est refusée une fois puis doit être renvoyée telle que le hook l'a réécrite. Préférer Read / Grep / outils MCP quand c'est possible.
 - `unity-mcp` est épinglé sur un commit dans `Packages/manifest.json` : ne pas le remettre sur `#main`.
+- Unity 6 sous Linux peut planter juste après un rechargement des scripts (`RebuildOSMenu` → `gtk_widget_set_parent` dans `~/.config/unity3d/Editor.log`), surtout quand un fichier avec `[MenuItem]` change. Symptôme : `refresh_unity` expire, « Unity session not available ». Sauvegarder la scène avant de recompiler ; demander à tsuki de relancer Unity.
+- Un composant déjà posé dans la scène garde ses anciennes valeurs sérialisées : changer la valeur par défaut d'un champ dans le script ne suffit pas, régler aussi la valeur dans la scène.
 - Git LFS est déclaré dans `.gitattributes` ; vérifier `git lfs version` avant d'ajouter des fichiers lourds.

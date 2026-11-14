@@ -26,6 +26,7 @@ namespace ParryEverything.Boss
     {
         [Header("Combat")]
         [SerializeField] private string bossName = "GARDIEN DES ENFERS";
+        [SerializeField] private string bossId = "HellGuardian";   // identifiant dans la sauvegarde (boss vaincus)
         [SerializeField] private float maxHealth = 250f;
         [SerializeField] private float activationRange = 16f;     // le combat commence quand le joueur approche
         [SerializeField] private float groundY = -0.45f;
@@ -81,6 +82,10 @@ namespace ParryEverything.Boss
         [SerializeField] private Color glowColor = new Color(1f, 0.5f, 0.1f);     // phase I
         [SerializeField] private Color rageColor = new Color(1f, 0.05f, 0.12f);   // phase V
         [Range(0, 4)] public int previewPhase = 0;              // éditeur hors Play : voir le boss à une phase donnée
+        [SerializeField] private bool labMode;                  // scène AnimationLab : pas de combat, gestes joués à la demande
+
+        // Gestes jouables un par un dans la scène AnimationLab
+        public enum LabMove { Swing, Orbs, Slam, MeteorRain, Dash, Pillars, Judgment, Roar, Stagger, PhaseTransition, Hit, Die }
 
         private static readonly string[] phaseNames =
         {
@@ -111,6 +116,7 @@ namespace ParryEverything.Boss
         private const float bladeScale = 1.4f;          // faux géante
 
         public bool IsDead { get { return dead; } }
+        public string BossId => bossId;
         public bool IsActive { get { return active; } }
         public int Phase { get { return phase; } }
         public Vector3 CorePosition { get { return core != null ? core.position : transform.position; } }
@@ -181,7 +187,7 @@ namespace ParryEverything.Boss
             horns.Clear();
             wings.Clear();
             visual = null;
-            if (Application.isPlaying) Time.timeScale = 1f;
+            if (Application.isPlaying) TimeControl.SetEffectScale(1f);
         }
 
         private void OnValidate()
@@ -202,6 +208,17 @@ namespace ParryEverything.Boss
         private void Start()
         {
             if (!Application.isPlaying) return;
+            if (labMode)
+            {
+                LabStart();
+                return;
+            }
+            // Déjà vaincu dans cette partie : il ne revient pas
+            if (GameSession.IsBossDefeated(bossId))
+            {
+                gameObject.SetActive(false);
+                return;
+            }
             target = FindFirstObjectByType<PlayerController>();
             // Le gardien attend sous terre
             transform.position = new Vector3(transform.position.x, groundY - 4f * scale, 0f);
@@ -232,14 +249,19 @@ namespace ParryEverything.Boss
             {
                 dieStarted = true;
                 StopAllCoroutines();
-                Time.timeScale = 1f;
+                TimeControl.SetEffectScale(1f);
                 StartCoroutine(Die());
+            }
+            else if (phaseChanged && labMode)
+            {
+                phaseChanged = false;
+                invulnerable = false;
             }
             else if (phaseChanged && !dead)
             {
                 phaseChanged = false;
                 StopAllCoroutines();
-                Time.timeScale = 1f;
+                TimeControl.SetEffectScale(1f);
                 StartCoroutine(Fight(true));
             }
 
@@ -366,9 +388,9 @@ namespace ParryEverything.Boss
             Framing();
             Shake(1f, 0.3f);
             SpawnBurst(80, 14f, 0.6f);
-            Time.timeScale = 0.3f;
+            TimeControl.SetEffectScale(0.3f);
             yield return new WaitForSecondsRealtime(0.7f);
-            Time.timeScale = 1f;
+            TimeControl.SetEffectScale(1f);
 
             // Recule au centre de l'arène
             float t = 0f;
@@ -910,15 +932,21 @@ namespace ParryEverything.Boss
 
         // ---------- Dégâts et mort ----------
 
+        // Outil de debug : mort immédiate (la séquence de mort se joue normalement)
+        public void DebugKill()
+        {
+            if (dead) return;
+            active = true;
+            health = 0f;
+            dead = true;
+        }
+
         public void TakeHit(float amount)
         {
             if (dead || !active || invulnerable) return;
             health -= amount;
             lastHitTime = Time.time;
-            flash = 1f;
-            tiltVel -= 90f;
-            headVel -= 120f;
-            Shake(0.15f, 0.12f);
+            HitReaction();
 
             if (health <= 0f)
             {
@@ -938,12 +966,21 @@ namespace ParryEverything.Boss
             }
         }
 
+        // Recul visible quand il est touché
+        private void HitReaction()
+        {
+            flash = 1f;
+            tiltVel -= 90f;
+            headVel -= 120f;
+            Shake(0.15f, 0.12f);
+        }
+
         private IEnumerator Die()
         {
             lockFacing = true;
             bannerTime = -100f;
             yield return new WaitForSecondsRealtime(0.12f);
-            Time.timeScale = 0.25f;
+            TimeControl.SetEffectScale(0.25f);
             Shake(2f, 0.35f);
             tiltTarget = -30f;
             weaponTarget = -60f;
@@ -959,10 +996,10 @@ namespace ParryEverything.Boss
                 transform.position = basePos + new Vector3(Mathf.PerlinNoise(nt, 0f) - 0.5f, Mathf.PerlinNoise(0f, nt) - 0.5f, 0f) * 0.25f;
                 if (Random.value < 0.1f) SpawnBurst(10, 6f, 0.3f);
                 t += Time.unscaledDeltaTime;
-                if (t > 1.2f) Time.timeScale = 1f;
+                if (t > 1.2f) TimeControl.SetEffectScale(1f);
                 yield return null;
             }
-            Time.timeScale = 1f;
+            TimeControl.SetEffectScale(1f);
             SpawnBurst(250, 16f, 1f);
             t = 0f;
             while (t < 0.4f)
@@ -971,10 +1008,115 @@ namespace ParryEverything.Boss
                 t += Time.deltaTime;
                 yield return null;
             }
+            if (labMode)
+            {
+                LabRevive();
+                yield break;
+            }
             Debug.Log(bossName + " vaincu !");
             GameCamera cam = GameCamera.Main;
             if (cam != null) cam.SetFraming(0f, 0f);
             Destroy(gameObject);
+        }
+
+        // =====================================================================
+        //  Scène AnimationLab : gestes joués un par un
+        // =====================================================================
+
+        private Vector3 labHome;
+        private bool labBusy;
+
+        public bool IsLab => labMode;
+        public bool LabBusy => labBusy;
+
+        // Visible tout de suite, en vol stationnaire, sans combat automatique
+        private void LabStart()
+        {
+            target = FindFirstObjectByType<PlayerController>();
+            active = true;
+            health = trailHealth = maxHealth;
+            labHome = new Vector3(transform.position.x, HoverY(), 0f);
+            transform.position = labHome;
+            lastPos = transform.position;
+            if (target != null) lastPlayerPos = target.transform.position;
+            SetVisible(true);
+        }
+
+        public void LabPlay(LabMove move)
+        {
+            if (!labMode || !Application.isPlaying || dead) return;
+            StopAllCoroutines();
+            TimeControl.SetEffectScale(1f);
+            ResetPose();
+            invulnerable = false;
+            labBusy = false;
+            switch (move)
+            {
+                case LabMove.Hit:
+                    HitReaction();
+                    return;
+                case LabMove.Die:
+                    DebugKill();   // Update lance la séquence de mort ; le boss revient ensuite
+                    labBusy = true;
+                    return;
+            }
+            labBusy = true;
+            StartCoroutine(LabRun(LabRoutine(move)));
+        }
+
+        // Change la phase (taille, pièces, couleur) sans passer par la transition
+        public void LabSetPhase(int newPhase)
+        {
+            if (!labMode || dead) return;
+            phase = Mathf.Clamp(newPhase, 0, 4);
+            health = trailHealth = maxHealth * (1f - phase / 5f);
+            labHome.y = HoverY();
+        }
+
+        private IEnumerator LabRoutine(LabMove move)
+        {
+            switch (move)
+            {
+                case LabMove.Swing: return Swing();
+                case LabMove.Orbs: return Orbs();
+                case LabMove.Slam: return Slam();
+                case LabMove.MeteorRain: return MeteorRain();
+                case LabMove.Dash: return Dash();
+                case LabMove.Pillars: return Pillars();
+                case LabMove.Judgment: return Judgment();
+                case LabMove.Roar: return Roar(1f);
+                case LabMove.Stagger: return Stagger();
+                default: return PhaseTransition();
+            }
+        }
+
+        // Joue le geste puis revient à sa place
+        private IEnumerator LabRun(IEnumerator move)
+        {
+            yield return move;
+            ResetPose();
+            invulnerable = false;
+            float t = 0f;
+            while (t < 1f && !dead)
+            {
+                MoveToward(labHome.x, labHome.y, 1.5f);
+                t += Time.deltaTime;
+                yield return null;
+            }
+            labBusy = false;
+        }
+
+        // Après la séquence de mort : revient au lieu d'être détruit
+        private void LabRevive()
+        {
+            dead = false;
+            dieStarted = false;
+            deathFade = 1f;
+            health = trailHealth = maxHealth * (1f - phase / 5f);
+            transform.position = labHome;
+            lastPos = labHome;
+            ResetPose();
+            labBusy = false;
         }
 
         private void SpawnBurst(int count, float speed, float radius)
@@ -1513,17 +1655,20 @@ namespace ParryEverything.Boss
         {
             if (!Application.isPlaying || !active) return;
 
-            float w = Mathf.Min(Screen.width * 0.8f, 1100f);
-            float h = 30f;
+            // Tailles pensées pour 1080p, ramenées à l'écran : rien ne sort du cadre sur une petite fenêtre
+            float ui = Screen.height / 1080f;
+            float w = Mathf.Min(Screen.width * 0.8f, 1100f * Mathf.Max(ui, 0.5f));
+            float h = Mathf.Max(12f, 30f * ui);
             float x = (Screen.width - w) / 2f;
-            float y = Screen.height - 64f;
+            float y = Screen.height - Mathf.Max(28f, 64f * ui);
             Color pc = PhaseColor();
 
             // Nom + phase courante
-            GUIStyle nameStyle = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.LowerLeft };
-            GUIStyle phaseStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Italic, alignment = TextAnchor.LowerRight };
-            GuiDraw.ShadowLabel(new Rect(x, y - 40f, w, 36f), bossName, nameStyle, pc);
-            GuiDraw.ShadowLabel(new Rect(x, y - 36f, w, 30f), "Phase " + roman[phase] + " — " + phaseNames[phase], phaseStyle, new Color(1f, 0.9f, 0.8f));
+            GUIStyle nameStyle = new GUIStyle(GUI.skin.label) { fontSize = GuiDraw.FontSize(26f), fontStyle = FontStyle.Bold, alignment = TextAnchor.LowerLeft, clipping = TextClipping.Overflow };
+            GUIStyle phaseStyle = new GUIStyle(GUI.skin.label) { fontSize = GuiDraw.FontSize(16f), fontStyle = FontStyle.Italic, alignment = TextAnchor.LowerRight, clipping = TextClipping.Overflow };
+            float labelH = Mathf.Max(18f, 40f * ui);
+            GuiDraw.ShadowLabel(new Rect(x, y - labelH, w, labelH - 4f), bossName, nameStyle, pc);
+            GuiDraw.ShadowLabel(new Rect(x, y - labelH, w, labelH - 4f), "Phase " + roman[phase] + " — " + phaseNames[phase], phaseStyle, new Color(1f, 0.9f, 0.8f));
 
             Color old = GUI.color;
             // Cadre
@@ -1547,13 +1692,14 @@ namespace ParryEverything.Boss
             if (bt >= 0f && bt < 3f && !dead)
             {
                 float a = Mathf.Clamp01(bt / 0.3f) * Mathf.Clamp01((3f - bt) / 0.8f);
-                GUIStyle big = new GUIStyle(GUI.skin.label) { fontSize = 64, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-                GUIStyle sub = new GUIStyle(GUI.skin.label) { fontSize = 30, fontStyle = FontStyle.Italic, alignment = TextAnchor.MiddleCenter };
+                GUIStyle big = new GUIStyle(GUI.skin.label) { fontSize = GuiDraw.FontSizeFitting(64f, 10, 0.9f, 16), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, clipping = TextClipping.Overflow };
+                GUIStyle sub = new GUIStyle(GUI.skin.label) { fontSize = GuiDraw.FontSizeFitting(30f, phaseNames[phase].Length, 0.9f, 11), fontStyle = FontStyle.Italic, alignment = TextAnchor.MiddleCenter, clipping = TextClipping.Overflow };
                 float cy = Screen.height * 0.3f;
-                GuiDraw.FilledRect(new Rect(0f, cy - 70f, Screen.width, 150f), new Color(0f, 0f, 0f, 0.55f * a));
+                float band = big.fontSize * 2.4f;
+                GuiDraw.FilledRect(new Rect(0f, cy - band * 0.47f, Screen.width, band), new Color(0f, 0f, 0f, 0.55f * a));
                 Color c = pc; c.a = a;
-                GuiDraw.ShadowLabel(new Rect(0f, cy - 60f, Screen.width, 80f), "PHASE " + roman[phase], big, c);
-                GuiDraw.ShadowLabel(new Rect(0f, cy + 20f, Screen.width, 40f), phaseNames[phase], sub, new Color(1f, 0.92f, 0.85f, a));
+                GuiDraw.ShadowLabel(new Rect(0f, cy - big.fontSize * 0.8f, Screen.width, big.fontSize * 1.3f), "PHASE " + roman[phase], big, c);
+                GuiDraw.ShadowLabel(new Rect(0f, cy + big.fontSize * 0.45f, Screen.width, sub.fontSize * 1.5f), phaseNames[phase], sub, new Color(1f, 0.92f, 0.85f, a));
             }
         }
     }

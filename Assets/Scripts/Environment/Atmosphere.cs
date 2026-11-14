@@ -8,6 +8,7 @@ namespace ParryEverything.Environment
     //  - Calme : bleu nuit froid, lumière qui "respire" lentement et vacille de temps en temps.
     //  - Combat de boss : le rouge sombre gagne du terrain en quelques secondes, la lumière faiblit
     //    et vacille plus souvent, la lune pulse.
+    //  - Rallumée : le Gardien vaincu, l'enfer éteint se rallume (braises orangées, lumière chaude). Pour de bon.
     // Les réglages "calme" sont aussi ceux de la scène (Lighting) : rien ne change hors Play.
     public class Atmosphere : MonoBehaviour
     {
@@ -33,6 +34,15 @@ namespace ParryEverything.Environment
         [SerializeField] private Color bossMoonColor = new Color(0.75f, 0.06f, 0.05f);
         [SerializeField] private float transitionTime = 6f;   // secondes pour passer d'une ambiance à l'autre
 
+        [Header("Rallumée (après le boss)")]
+        [SerializeField] private string rekindleAfterBoss = "HellGuardian";   // boss dont la mort rallume la zone
+        [SerializeField] private Color kindledFogColor = new Color(0.14f, 0.05f, 0.025f);
+        [SerializeField] private float kindledFogEnd = 100f;
+        [SerializeField] private Color kindledLightColor = new Color(1f, 0.62f, 0.4f);
+        [SerializeField] private float kindledLightIntensity = 0.8f;
+        [SerializeField] private Color kindledMoonColor = new Color(1f, 0.45f, 0.1f);
+        [SerializeField] private float kindleTime = 5f;       // secondes pour se rallumer
+
         [Header("Lumière instable")]
         [Range(0f, 0.5f)] [SerializeField] private float breathAmount = 0.1f;   // variation lente d'intensité
         [SerializeField] private float breathSpeed = 0.12f;
@@ -42,6 +52,8 @@ namespace ParryEverything.Environment
 
         private HellGuardian boss;
         private float dread;
+        private float kindle;             // 0 : éteinte, 1 : rallumée
+        private bool kindling;
         private float flickerTimer;
         private float flickerLeft;
         private float flickerLength;
@@ -54,6 +66,15 @@ namespace ParryEverything.Environment
         public static Atmosphere Current { get; private set; }
 
         public float Dread => dread;
+        public bool IsKindled => kindling;
+
+        // La zone se rallume (boss vaincu) ; instant = déjà rallumée au chargement
+        public void Rekindle(bool instant = false)
+        {
+            kindling = true;
+            if (instant) kindle = 1f;
+            Flash(1f, 2.5f);
+        }
 
         private void OnEnable()
         {
@@ -77,6 +98,11 @@ namespace ParryEverything.Environment
         {
             block = new MaterialPropertyBlock();
             flickerTimer = Random.Range(flickerInterval.x, flickerInterval.y);
+            if (GameSession.IsBossDefeated(rekindleAfterBoss))
+            {
+                kindling = true;
+                kindle = 1f;
+            }
             Apply(1f);
         }
 
@@ -85,6 +111,7 @@ namespace ParryEverything.Environment
             if (boss == null) boss = FindFirstObjectByType<HellGuardian>();
             bool fight = boss != null && boss.IsActive && !boss.IsDead;
             dread = Mathf.MoveTowards(dread, fight ? 1f : 0f, Time.deltaTime / Mathf.Max(0.01f, transitionTime));
+            if (kindling) kindle = Mathf.MoveTowards(kindle, 1f, Time.deltaTime / Mathf.Max(0.01f, kindleTime));
 
             // Vacillement : brève chute de lumière, à intervalles irréguliers
             flickerTimer -= Time.deltaTime;
@@ -114,21 +141,22 @@ namespace ParryEverything.Environment
 
         private void Apply(float lightFactor)
         {
-            Color fog = Color.Lerp(fogColor, bossFogColor, dread);
+            float k = Mathf.SmoothStep(0f, 1f, kindle);
+            Color fog = Color.Lerp(Color.Lerp(fogColor, bossFogColor, dread), kindledFogColor, k);
             // La lueur vacille un peu en s'éteignant
             float glow = flash * (0.75f + 0.25f * Mathf.PerlinNoise(Time.time * 9f, 3.1f));
             fog = Color.Lerp(fog, flashColor, glow * 0.6f);
             RenderSettings.fogColor = fog;
             RenderSettings.fogStartDistance = fogStart;
-            RenderSettings.fogEndDistance = Mathf.Lerp(fogEnd, bossFogEnd, dread);
+            RenderSettings.fogEndDistance = Mathf.Lerp(Mathf.Lerp(fogEnd, bossFogEnd, dread), kindledFogEnd, k);
 
             Camera cam = Camera.main;
             if (cam != null) cam.backgroundColor = fog;
 
             if (sun != null)
             {
-                sun.color = Color.Lerp(lightColor, bossLightColor, dread);
-                sun.intensity = Mathf.Lerp(lightIntensity, bossLightIntensity, dread) * lightFactor;
+                sun.color = Color.Lerp(Color.Lerp(lightColor, bossLightColor, dread), kindledLightColor, k);
+                sun.intensity = Mathf.Lerp(Mathf.Lerp(lightIntensity, bossLightIntensity, dread), kindledLightIntensity, k) * lightFactor;
             }
 
             if (block == null) return;
@@ -138,7 +166,7 @@ namespace ParryEverything.Environment
             {
                 // Pendant le combat, la lune pulse lentement comme un cœur fatigué
                 float pulse = 1f + Mathf.Sin(Time.time * 1.3f) * 0.12f * dread;
-                Color c = Color.Lerp(moonColor, bossMoonColor, dread) * pulse * Mathf.Lerp(1f, lightFactor, 0.5f);
+                Color c = Color.Lerp(Color.Lerp(moonColor, bossMoonColor, dread), kindledMoonColor, k) * pulse * Mathf.Lerp(1f, lightFactor, 0.5f);
                 c.a = 1f;
                 SetColor(moon, c);
             }

@@ -88,6 +88,9 @@ namespace ParryEverything.Audio
         private float y1Low, y1Band, y2Low, y2Band, cryLp;
 
         // pan : -1 gauche .. 1 droite ; loudness : 0..1 (plus faible quand c'est loin)
+        // Coupé (sanctuaire) : le vent s'efface en douceur
+        public bool Muted { get; set; }
+
         public void PlayDistant(DistantSound sound, float pan, float loudness)
         {
             pan = Mathf.Clamp(pan, -1f, 1f);
@@ -128,7 +131,7 @@ namespace ParryEverything.Audio
             bool fight = boss != null && boss.IsActive && !boss.IsDead;
             fighting = fight;
             dreadTarget = fight ? 1f : 0f;
-            gainTarget = volume * (fight ? duringBoss : 1f);
+            gainTarget = Muted ? 0f : volume * (fight ? duringBoss : 1f);
         }
 
         private float Rand()

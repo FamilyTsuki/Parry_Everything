@@ -88,6 +88,12 @@ namespace ParryEverything.Player
         private Rigidbody rb;
         private float soulScale = 1f;           // taille affichée : rattrape PlayerBody.SoulScale (l'âme se consume)
 
+        // Pose imposée par le corps (CatBody) : enfermée dans la boule, ou tête posée sur le torse
+        private Vector3 poseOffset, poseOffsetTarget;
+        private float poseScale = 1f, poseScaleTarget = 1f;
+        private float poseBob = 1f, poseBobTarget = 1f;
+        private bool hidden;
+
         private GameObject visual;
         private Mesh mesh;
         private Material soulMat;
@@ -177,6 +183,20 @@ namespace ParryEverything.Player
             }
         }
 
+        // Âme cachée : la chair la recouvre entièrement (boule, corps debout)
+        public void SetHidden(bool value)
+        {
+            hidden = value;
+        }
+
+        // Le corps place l'âme : décalage, taille, lévitation (0 = immobile). Transition douce.
+        public void SetPose(Vector3 extraOffset, float scale, float bob)
+        {
+            poseOffsetTarget = extraOffset;
+            poseScaleTarget = scale;
+            poseBobTarget = bob;
+        }
+
         // Parry réussi : flash blanc + pulsation
         public void OnParrySuccess(float flash)
         {
@@ -220,6 +240,7 @@ namespace ParryEverything.Player
             {
                 return;
             }
+            if (visual.activeSelf == hidden) visual.SetActive(!hidden);
 
             bool playing = Application.isPlaying;
             float dt;
@@ -301,9 +322,15 @@ namespace ParryEverything.Player
                 }
             }
 
+            // Pose du corps (transition douce, en temps réel)
+            float pk = 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime);
+            poseOffset = Vector3.Lerp(poseOffset, poseOffsetTarget, pk);
+            poseScale = Mathf.Lerp(poseScale, poseScaleTarget, pk);
+            poseBob = Mathf.Lerp(poseBob, poseBobTarget, pk);
+
             // Position : suit le joueur, lévite
-            float bob = Mathf.Sin(time * bobSpeed) * bobHeight;
-            visual.transform.position = transform.position + offset + Vector3.up * bob;
+            float bob = Mathf.Sin(time * bobSpeed) * bobHeight * poseBob;
+            visual.transform.position = transform.position + offset + poseOffset + Vector3.up * bob;
 
             // Rotation : tête tournée vers la direction, penchée dans le mouvement
             float lean = -drag.x * leanAngle;
@@ -320,7 +347,7 @@ namespace ParryEverything.Player
             {
                 soulScale = 1f;
             }
-            visual.transform.localScale = Vector3.one * (soulScale + punch);
+            visual.transform.localScale = Vector3.one * ((soulScale + punch) * poseScale);
 
             Quaternion inv = Quaternion.Inverse(rot);
             dragLocal = inv * drag;

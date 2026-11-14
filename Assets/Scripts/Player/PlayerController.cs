@@ -2,24 +2,51 @@ using System;
 using System.Collections;
 using ParryEverything.Core;
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using Random = UnityEngine.Random;
 
 namespace ParryEverything.Player
 {
     // Joueur : déplacement, saut, parade, dégâts et voile rouge à l'écran.
     // La santé (âme, membres) est gérée par PlayerBody : pas de barre de vie.
+    // Trois formes (PlayerBody.Form) : âme (lente, flottante), boule de chair (lourde, roule avec de l'inertie),
+    // debout sur ses pattes (course, parade de chute ; sur une seule patte, il sautille).
     [RequireComponent(typeof(Rigidbody))]
     public class PlayerController : MonoBehaviour
     {
         [Header("Déplacement")]
-        [SerializeField] private float speed = 5.0f;
+        [SerializeField] private float soulSpeed = 3.5f;
+        [FormerlySerializedAs("speed")]
+        [SerializeField] private float bodySpeed = 3.5f;                // debout : les pattes (0,85 m) font des pas d'environ 0,9 m
+        [SerializeField] private float runSpeed = 6.0f;                 // debout sur 2 pattes, Maj gauche
+        [Range(0f, 1f)] [SerializeField] private float oneLegSpeedFactor = 0.55f;    // une seule patte : il sautille
+        [Range(0f, 1f)] [SerializeField] private float oneLegJumpFactor = 0.5f;      // une seule patte : saut réduit
 
-        [Header("Mort")]
-        [SerializeField] private float deathRestartDelay = 1.5f; // en attendant les sanctuaires : on relance la scène
+        [Header("Boule de chair : lourde, roule")]
+        [SerializeField] private float ballSpeed = 4.2f;
+        [SerializeField] private float ballAcceleration = 9f;           // prend de l'élan...
+        [SerializeField] private float ballDeceleration = 5f;           // ...et continue de rouler un peu
+        [SerializeField] private float ballJumpHeight = 1.1f;           // rebond court
+
+        [Header("Âme : saut lent et flottant")]
+        [Range(0.1f, 1f)] [SerializeField] private float soulGravityFactor = 0.45f;  // part de la gravité ressentie par l'âme
+        [SerializeField] private float soulMaxFallSpeed = 6f;
+
+        [Header("Collision")]
+        // Debout, la boule est portée haut par les pattes : la collision grandit vers le haut (les pieds restent au sol)
+        [SerializeField] private float standingHeight = 1.75f;
+
+        [Header("Chute (corps)")]
+        [SerializeField] private float fallDamageHeight = 4f;           // au-delà, une patte est arrachée...
+        [SerializeField] private float fallParryTime = 0.15f;           // ...sauf parade juste avant l'impact
+
+        [Header("Recouture sur place")]
+        [SerializeField] private float sewHoldTime = 1.5f;              // maintenir ↓, immobile au sol
+
+        [Header("Absorption d'âme")]
+        [SerializeField] private float absorbRange = 1.6f;              // parer au contact d'un ennemi étourdi
 
         [Header("Saut")]
-        [SerializeField] private KeyCode jumpKey = KeyCode.UpArrow;
         [SerializeField] private float jumpHeight = 2.0f;               // hauteur max (touche maintenue)
         [SerializeField] private float fallGravityMultiplier = 2.2f;    // chute plus rapide que la montée : moins flottant
         [SerializeField] private float lowJumpGravityMultiplier = 3.0f; // touche relâchée tôt : petit saut
@@ -40,10 +67,13 @@ namespace ParryEverything.Player
         [SerializeField] private float shakeMagnitude = 0.15f;
 
         [Header("Parade")]
-        // Fenêtre active après appui, puis temps d'attente si raté
-        [SerializeField] private KeyCode parryKey = KeyCode.X;
-        [SerializeField] private float parryWindow = 0.35f;
-        [SerializeField] private float parryCooldown = 0.4f;
+        // Fenêtre active après appui, puis temps d'attente si raté (touches : GameInput)
+        [SerializeField] private float soulParryWindow = 0.35f;
+        [SerializeField] private float soulParryCooldown = 0.5f;
+        [SerializeField] private float bodyParryWindow = 0.3f;
+        [SerializeField] private float bodyParryCooldown = 0.3f;
+        [SerializeField] private float perfectParryTime = 0.1f;   // parade réussie dans ce début de fenêtre = parfaite
+        [SerializeField] private float perfectChainGap = 2f;      // délai max entre deux parades parfaites enchaînées
 
         [Header("Indicateur de parade (étoile en haut à droite du joueur)")]
         [SerializeField] private Vector3 parryStarOffset = new Vector3(0.7f, 0.7f, -0.6f);
@@ -66,6 +96,8 @@ namespace ParryEverything.Player
 
         // Prévient les autres scripts (ex : musique) à chaque parade réussie
         public static event Action OnParry;
+        // Parade parfaite : niveau de la chaîne (1 à 3)
+        public static event Action<int> OnPerfectParry;
 
         // Santé globale de 0 à 1 (musique, effets d'écran)
         public float HealthRatio => body != null ? body.HealthRatio : 1f;
@@ -73,8 +105,23 @@ namespace ParryEverything.Player
         public float Facing => facing;
         public bool IsGrounded => coyoteTimer > 0f;
         public bool IsParrying() => parryTimer > 0f;
+        public bool HasBody => body != null && body.HasBody;
+        public PlayerForm Form => body != null ? body.Form : PlayerForm.Soul;
+        public bool IsRunning { get; private set; }
+        // Recouture sur place en cours : 0 à 1
+        public float SewProgress => sewHoldTime > 0f ? Mathf.Clamp01(sewTimer / sewHoldTime) : 0f;
+        // Parades parfaites enchaînées (0 à 3) : assourdit le monde (MuffledWorld)
+        public int PerfectChainLevel => perfectChain != null ? perfectChain.Level : 0;
+        // Fenêtres de parade selon l'état (âme ou corps)
+        // Debout, le chat pare plus vite ; l'âme et la boule restent lentes
+        public float ParryWindow => Form == PlayerForm.Biped ? bodyParryWindow : soulParryWindow;
+        public float ParryCooldown => Form == PlayerForm.Biped ? bodyParryCooldown : soulParryCooldown;
+        public float ParryTimeLeft => Mathf.Max(0f, parryTimer);
+        public float ParryCooldownLeft => Mathf.Max(0f, parryCooldownTimer);
 
         private Rigidbody rb;
+        private BoxCollider box;
+        private Vector3 baseBoxSize, baseBoxCenter;
         private PlayerBody body;
         private CatSoul soul; // visuel : âme de chat
         private GameObject parryStar;
@@ -92,6 +139,21 @@ namespace ParryEverything.Player
         // Parade
         private float parryTimer;          // temps restant de la fenêtre de parade
         private float parryCooldownTimer;  // temps avant de pouvoir re-parer
+        private float activeParryWindow;   // durée de la fenêtre ouverte (pour la parade parfaite)
+        private bool parrySucceeded;       // la fenêtre en cours a paré quelque chose
+        private float lastParryPressTime = -10f;
+        private PerfectParryChain perfectChain;
+
+        // Boule : vitesse de roulement (indépendante du frottement)
+        private float ballVelocityX;
+
+        // Chute
+        private bool wasGrounded = true;
+        private float airApexY;            // point le plus haut depuis qu'on a quitté le sol
+
+        // Recouture
+        private float sewTimer;
+        private float sewSparkTimer;
 
         // Voile rouge
         private float hurtTime = -10f;      // temps réel du dernier coup
@@ -109,17 +171,41 @@ namespace ParryEverything.Player
             {
                 body = gameObject.AddComponent<PlayerBody>();
             }
+            perfectChain = new PerfectParryChain(perfectChainGap, 3);
+            body.OnLimbLost += HandleLimbLost;
+        }
+
+        private void OnDestroy()
+        {
+            if (body != null) body.OnLimbLost -= HandleLimbLost;
+        }
+
+        // Membre arraché : il tombe au sol, on peut revenir le ramasser
+        private void HandleLimbLost(Limb limb)
+        {
+            LimbPickup.Spawn(body, limb, limb.WorldAnchor(transform.position, facing), facing);
+            SpawnSparks(limb.WorldAnchor(transform.position, facing), hurtColor, 70, 1.5f);
         }
 
         private void Start()
         {
             rb = GetComponent<Rigidbody>();
+            box = GetComponent<BoxCollider>();
+            if (box != null)
+            {
+                baseBoxSize = box.size;
+                baseBoxCenter = box.center;
+            }
             // Mouvement lissé entre deux pas physiques : visuel et caméra sans saccades
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             soul = GetComponent<CatSoul>();
             if (soul == null)
             {
                 soul = gameObject.AddComponent<CatSoul>();
+            }
+            if (GetComponent<CatBody>() == null)
+            {
+                gameObject.AddComponent<CatBody>();
             }
             parryStar = CreateStar();
             sfx = gameObject.AddComponent<AudioSource>();
@@ -134,39 +220,110 @@ namespace ParryEverything.Player
             // Sans touche appuyée, pas de déplacement
             moveX = 0f;
             jumpHeld = false;
-            if (IsDead)
+            IsRunning = false;
+            // Mort, menu, pause, scène ou écran de fin : le joueur ne contrôle rien
+            if (IsDead || !GameFlow.IsPlaying)
             {
+                sewTimer = 0f;
                 return;
             }
-            if (Input.GetKey(KeyCode.RightArrow))
-            {
-                moveX = 1f;
-            }
-            else if (Input.GetKey(KeyCode.LeftArrow))
-            {
-                moveX = -1f;
-            }
+            perfectChain.Tick(Time.time);
+
+            moveX = GameInput.MoveX;
             if (moveX != 0f)
             {
                 facing = moveX;
             }
+            // Course : debout sur ses 2 pattes
+            IsRunning = moveX != 0f && Form == PlayerForm.Biped && body.IntactLegCount >= 2 && GameInput.Held(GameAction.Run);
 
             // Saut : l'appui est mémorisé un court instant, le saut part dans FixedUpdate
             jumpBufferTimer -= Time.deltaTime;
-            if (Input.GetKeyDown(jumpKey))
+            if (GameInput.Pressed(GameAction.Jump))
             {
                 jumpBufferTimer = jumpBufferTime;
             }
-            jumpHeld = Input.GetKey(jumpKey);
+            jumpHeld = GameInput.Held(GameAction.Jump);
+
+            UpdateSewing();
 
             // Parade : ouvre la fenêtre, et bloque un nouvel appui jusqu'à la fin de fenêtre + cooldown
+            bool wasParrying = parryTimer > 0f;
             parryTimer -= Time.deltaTime;
             parryCooldownTimer -= Time.deltaTime;
-            if (Input.GetKeyDown(parryKey) && parryCooldownTimer <= 0f)
+            if (wasParrying && parryTimer <= 0f && !parrySucceeded)
             {
-                parryTimer = parryWindow;
-                parryCooldownTimer = parryWindow + parryCooldown;
+                // Fenêtre fermée sans rien parer : la chaîne de parades parfaites se rompt
+                perfectChain.Reset();
             }
+            if (GameInput.Pressed(GameAction.Parry))
+            {
+                lastParryPressTime = Time.time;
+                if (TryAbsorbSoul())
+                {
+                    // Parer au contact d'un ennemi étourdi : son âme est absorbée
+                }
+                else if (parryCooldownTimer <= 0f)
+                {
+                    activeParryWindow = ParryWindow;
+                    parryTimer = activeParryWindow;
+                    parryCooldownTimer = activeParryWindow + ParryCooldown;
+                    parrySucceeded = false;
+                }
+            }
+        }
+
+        // Recouture sur place : maintenir ↓, immobile au sol, avec un membre en poche
+        private void UpdateSewing()
+        {
+            bool canSew = body.PocketCount > 0 && IsGrounded && GameInput.Held(GameAction.Sew);
+            if (!canSew)
+            {
+                sewTimer = 0f;
+                return;
+            }
+
+            // On reste sur place pendant la couture
+            moveX = 0f;
+            IsRunning = false;
+            jumpBufferTimer = 0f;
+            sewTimer += Time.deltaTime;
+            sewSparkTimer -= Time.deltaTime;
+            if (sewSparkTimer <= 0f)
+            {
+                sewSparkTimer = 0.2f;
+                SpawnSparks(transform.position + new Vector3(0f, -0.3f, -0.3f), new Color(0.9f, 0.85f, 0.8f), 6, 0.4f);
+            }
+            if (sewTimer >= sewHoldTime && body.SewNext())
+            {
+                sewTimer = 0f;
+                SpawnSparks(transform.position, new Color(1f, 0.4f, 0.35f), 40, 1f);
+                if (soul != null) soul.OnParrySuccess(0.15f);
+                GameCamera.ShakeMain(0.15f, 0.08f);
+            }
+        }
+
+        // Parade au contact d'un ennemi étourdi : absorbe son âme. Renvoie true si une âme a été absorbée.
+        private bool TryAbsorbSoul()
+        {
+            foreach (Collider c in Physics.OverlapSphere(transform.position, absorbRange))
+            {
+                ISoulVessel vessel = c.GetComponentInParent<ISoulVessel>();
+                if (vessel == null || !vessel.CanAbsorb) continue;
+
+                Vector3 from = vessel.Position;
+                vessel.Absorb();
+                BehaviorLedger.AddSoulAbsorbed();
+
+                // L'âme bleue quitte le corps et rejoint le chat
+                SpawnSparks(from, new Color(0.4f, 0.75f, 1f), 60, 1.2f);
+                SpawnSparks(transform.position, new Color(0.6f, 0.9f, 1f), 30, 0.6f);
+                if (soul != null) soul.OnParrySuccess(0.2f);
+                GameCamera.ShakeMain(0.2f, 0.12f);
+                if (!isHitStopped) StartCoroutine(HitStop(0.12f));
+                return true;
+            }
+            return false;
         }
 
         // Affiche l'étoile seulement pendant la fenêtre de parade, et la garde collée au joueur
@@ -194,14 +351,30 @@ namespace ParryEverything.Player
             {
                 coyoteTimer -= dt;
             }
+            // Atterrissage : hauteur de chute depuis le point le plus haut
+            UpdateCollider();
+            bool grounded = isGrounded;
+            float y = rb.position.y;
+            if (grounded && !wasGrounded)
+            {
+                OnLanded(airApexY - y);
+            }
+            airApexY = grounded ? y : Mathf.Max(airApexY, y);
+            wasGrounded = grounded;
             isGrounded = false;
 
             Vector3 v = rb.linearVelocity;
+            PlayerForm form = Form;
+            bool hasBody = form != PlayerForm.Soul;
+            // L'âme ressent moins la gravité : saut lent et flottant
+            float gravityFactor = hasBody ? 1f : soulGravityFactor;
 
-            // Saut : vitesse calculée pour atteindre exactement jumpHeight
+            // Saut : vitesse calculée pour atteindre exactement la hauteur voulue
             if (jumpBufferTimer > 0f && coyoteTimer > 0f && !isKnockedBack)
             {
-                v.y = Mathf.Sqrt(2f * -g * jumpHeight);
+                float height = form == PlayerForm.Ball ? ballJumpHeight : jumpHeight;
+                if (form == PlayerForm.Biped && body.IntactLegCount == 1) height *= oneLegJumpFactor;
+                v.y = Mathf.Sqrt(2f * -g * gravityFactor * height);
                 jumpBufferTimer = 0f;
                 coyoteTimer = 0f;
                 isJumping = true;
@@ -222,8 +395,8 @@ namespace ParryEverything.Player
             {
                 gravityScale = apexGravityMultiplier;
             }
-            v.y += g * (gravityScale - 1f) * dt;
-            v.y = Mathf.Max(v.y, -maxFallSpeed);
+            v.y += g * (gravityScale * gravityFactor - 1f) * dt;
+            v.y = Mathf.Max(v.y, -(hasBody ? maxFallSpeed : soulMaxFallSpeed));
 
             if (isKnockedBack)
             {
@@ -235,7 +408,82 @@ namespace ParryEverything.Player
                 isKnockedBack = false;
             }
 
-            rb.linearVelocity = new Vector3(moveX * speed, v.y, 0);
+            float targetX = moveX * CurrentSpeed();
+            if (form == PlayerForm.Ball)
+            {
+                // La boule prend de l'élan et continue de rouler quand on lâche. Sa vitesse est gardée à part :
+                // celle du Rigidbody est rongée par le frottement du sol à chaque pas physique (elle ne roulerait pas)
+                float accel = moveX != 0f ? ballAcceleration : ballDeceleration;
+                // Contre un mur, la physique a annulé la vitesse : l'élan est perdu
+                if (Mathf.Abs(v.x) < 0.01f && Mathf.Abs(ballVelocityX) > 1f) ballVelocityX = 0f;
+                ballVelocityX = Mathf.MoveTowards(ballVelocityX, targetX, accel * dt);
+                targetX = ballVelocityX;
+            }
+            else
+            {
+                ballVelocityX = targetX;
+            }
+            rb.linearVelocity = new Vector3(targetX, v.y, 0);
+        }
+
+        // Debout, la collision monte jusqu'à la boule portée par les pattes ; le bas (les pieds) ne bouge pas
+        private void UpdateCollider()
+        {
+            if (box == null) return;
+            float height = Form == PlayerForm.Biped ? Mathf.Max(baseBoxSize.y, standingHeight) : baseBoxSize.y;
+            if (Mathf.Approximately(box.size.y, height)) return;
+            box.size = new Vector3(baseBoxSize.x, height, baseBoxSize.z);
+            box.center = baseBoxCenter + Vector3.up * ((height - baseBoxSize.y) * 0.5f);
+        }
+
+        // Vitesse selon la forme : âme lente, boule, debout (course, une seule patte)
+        private float CurrentSpeed()
+        {
+            switch (Form)
+            {
+                case PlayerForm.Soul: return soulSpeed;
+                case PlayerForm.Ball: return ballSpeed;
+                default:
+                    if (IsRunning) return runSpeed;
+                    return body.IntactLegCount >= 2 ? bodySpeed : bodySpeed * oneLegSpeedFactor;
+            }
+        }
+
+        // Chute de plus de fallDamageHeight debout : une patte est arrachée, sauf parade juste avant l'impact.
+        // L'âme flotte, la boule rebondit : seules les pattes souffrent des chutes.
+        private void OnLanded(float drop)
+        {
+            if (Form != PlayerForm.Biped || drop <= fallDamageHeight || IsDead) return;
+
+            Vector3 feet = transform.position + Vector3.down * 0.45f;
+            if (Time.time - lastParryPressTime <= fallParryTime)
+            {
+                // Parade de chute : poussière, petit arrêt du temps, aucun dégât
+                SpawnSparks(feet, new Color(0.55f, 0.5f, 0.48f), 50, 1.1f);
+                SpawnSparks(feet, parryParticleColor, 20, 0.8f);
+                OnParry?.Invoke();
+                if (soul != null) soul.OnParrySuccess(parryFlashDuration);
+                GameCamera.ShakeMain(parryShakeDuration, parryShakeMagnitude);
+                if (!isHitStopped) StartCoroutine(HitStop(0.06f));
+                return;
+            }
+
+            // Chute ratée : une patte au hasard est arrachée
+            int intact = body.IntactLegCount;
+            int pick = Random.Range(0, intact);
+            foreach (Limb limb in body.Limbs)
+            {
+                if (limb.IsTorn || limb.Kind != LimbKind.Leg) continue;
+                if (pick-- == 0)
+                {
+                    body.TearLimb(limb);
+                    break;
+                }
+            }
+            perfectChain.Reset();
+            FeelHurt(20f, feet);
+            GameCamera.ShakeMain(shakeDuration + 0.1f, shakeMagnitude + 0.2f);
+            if (!isHitStopped) StartCoroutine(HitStop(hitStopDuration));
         }
 
         // Sol = contact dont la normale pointe vers le haut
@@ -280,24 +528,15 @@ namespace ParryEverything.Player
                 return false;
             }
 
-            bool killed = body.ApplyDamage(damage);
-            if (soul != null)
-            {
-                soul.OnHurt();
-            }
+            // Avec un corps, le coup touche la patte la plus proche du point d'impact
+            Vector3 impact = hitPoint ?? (source != null ? source.position : transform.position);
+            Limb target = body.HasBody ? body.NearestLimb(impact, facing) : null;
+            bool killed = body.ApplyDamage(damage, target);
+            perfectChain.Reset();
 
-            // Ressenti : voile rouge, son, éclats rouges au point d'impact
-            hurtTime = Time.unscaledTime;
-            hurtStrength = Mathf.Clamp01(0.45f + damage / 40f);
-            if (sfx != null && hurtClip != null)
-            {
-                sfx.pitch = Random.Range(0.9f, 1.08f);
-                sfx.PlayOneShot(hurtClip, hurtVolume * Mathf.Clamp(0.6f + damage / 30f, 0.6f, 1.2f));
-            }
             Vector3 bloodPos = transform.position;
             if (hitPoint.HasValue) bloodPos = Vector3.Lerp(transform.position, hitPoint.Value, 0.5f);
-            bloodPos.z = transform.position.z;
-            SpawnSparks(bloodPos, hurtColor, 50, 1.3f);
+            FeelHurt(damage, bloodPos);
 
             if (killed)
             {
@@ -309,6 +548,7 @@ namespace ParryEverything.Player
                 dir.z = 0f;
 
                 rb.linearVelocity = dir.normalized * knockbackForce;
+                ballVelocityX = rb.linearVelocity.x;
                 isKnockedBack = true;
             }
 
@@ -326,12 +566,38 @@ namespace ParryEverything.Player
             return true;
         }
 
+        // Ressenti d'un coup reçu : flash de l'âme, voile rouge, son, éclats rouges
+        private void FeelHurt(float damage, Vector3 bloodPos)
+        {
+            if (soul != null)
+            {
+                soul.OnHurt();
+            }
+            hurtTime = Time.unscaledTime;
+            hurtStrength = Mathf.Clamp01(0.45f + damage / 40f);
+            if (sfx != null && hurtClip != null)
+            {
+                sfx.pitch = Random.Range(0.9f, 1.08f);
+                sfx.PlayOneShot(hurtClip, hurtVolume * Mathf.Clamp(0.6f + damage / 30f, 0.6f, 1.2f));
+            }
+            bloodPos.z = transform.position.z;
+            SpawnSparks(bloodPos, hurtColor, 50, 1.3f);
+        }
+
         // Parade réussie : aucun dégât, et on peut re-parer tout de suite
         private void OnParried(Transform source, Vector3? hitPoint)
         {
+            // Parfaite si le coup arrive dans le tout début de la fenêtre
+            float elapsed = activeParryWindow - parryTimer;
+            bool perfect = elapsed <= perfectParryTime;
+            parrySucceeded = true;
             parryTimer = 0f;
             parryCooldownTimer = 0f;
             OnParry?.Invoke();
+            if (perfect)
+            {
+                OnPerfectParry?.Invoke(perfectChain.Register(Time.time));
+            }
 
             // Étincelles au point de contact, sinon entre le joueur et l'origine du coup
             Vector3 sparkPos = transform.position + Vector3.right * facing * 0.8f;
@@ -367,13 +633,13 @@ namespace ParryEverything.Player
         private IEnumerator HitStop(float duration)
         {
             isHitStopped = true;
-            Time.timeScale = 0f;
+            TimeControl.SetEffectScale(0f);
             yield return new WaitForSecondsRealtime(duration);
-            Time.timeScale = 1f;
+            TimeControl.SetEffectScale(1f);
             isHitStopped = false;
         }
 
-        // Âme consumée. Provisoire : on relance la scène (les sanctuaires remplaceront ça).
+        // Âme consumée : effets de mort. La réapparition est gérée par GameFlow (PlayerBody.OnDied).
         private void Die()
         {
             parryTimer = 0f;
@@ -382,14 +648,6 @@ namespace ParryEverything.Player
                 rb.linearVelocity = Vector3.zero;
             }
             GameCamera.ShakeMain(shakeDuration + 0.2f, shakeMagnitude * 2f);
-            StartCoroutine(RestartAfterDeath());
-        }
-
-        private IEnumerator RestartAfterDeath()
-        {
-            yield return new WaitForSecondsRealtime(deathRestartDelay);
-            Time.timeScale = 1f;
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 
         // ---------- Effets ----------
