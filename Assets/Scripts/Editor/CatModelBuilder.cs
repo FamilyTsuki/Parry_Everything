@@ -151,6 +151,8 @@ namespace ParryEverything.Editor
             // Gameplay : torse en poitrine / ventre / bassin, patte en cuisse / jarret / pied (une vie chacun)
             SplitTorso(built, s);
             SplitLeg(built);
+            // Queue : segments recollés en un maillage continu à os (CatTailBuilder)
+            CatTailBuilder.Chain tailChain = CatTailBuilder.Merge(built, rig);
             // Modèle généré : la main reste dans l'avant-bras (main vide)
             if (!built.Exists(x => x.name == "CatHand")) built.Add(EmptyMesh("CatHand", 2));
             if (IsLowPoly(s))
@@ -216,10 +218,30 @@ namespace ParryEverything.Editor
                 AddRenderer(go, m["CatHead"], flesh, glow);
             });
 
-            // CatTail (naissance) → Seg0 → Seg1 → ... → SegN (chaque segment est un pivot)
+            // CatTail (naissance) → Bone0 → Bone1 → ... → BoneN : chaîne régulière d'os (pose de repos du fichier),
+            //                     → Tail : un seul maillage continu déformé par ces os (CatBody les anime)
+            // Sans chaîne (segments manquants) : ancienne queue en segments rigides Seg0 → Seg1 → ...
             SavePrefab("CatTail", go =>
             {
                 Transform parent = go.transform;
+                if (tailChain != null)
+                {
+                    var bones = new Transform[CatTailBuilder.BoneCount];
+                    for (int k = 0; k < bones.Length; k++)
+                    {
+                        parent = AddChild(parent, "Bone" + k, tailChain.LocalPositions[k], null);
+                        parent.localRotation = Quaternion.Euler(0f, 0f, tailChain.LocalAngles[k]);
+                        bones[k] = parent;
+                    }
+                    var skin = new GameObject("Tail").AddComponent<SkinnedMeshRenderer>();
+                    skin.transform.SetParent(go.transform, false);
+                    skin.sharedMesh = m[CatTailBuilder.MeshName];
+                    skin.sharedMaterial = flesh;
+                    skin.bones = bones;
+                    skin.rootBone = bones[0];
+                    skin.updateWhenOffscreen = true;
+                    return;
+                }
                 for (int i = 0; i < rig.TailSegments; i++)
                 {
                     parent = AddChild(parent, "Seg" + i, i == 0 ? Vector3.zero : rig.TailPositions[i], m["CatTailSeg" + i], flesh);

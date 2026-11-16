@@ -12,7 +12,7 @@ struct Input
 {
     float4 color : COLOR;
     float4 furData;
-    float vein;
+    float vein;      // veines (le bourrelet des sutures n'a pas de fourrure : inutile ici, place comptée)
     float3 strandPos;   // position d'origine (repère du mesh) : les poils ne glissent pas quand la couche gonfle
 };
 
@@ -34,7 +34,7 @@ float StrandHash (float3 cell)
 
 void surfShell (Input IN, inout SurfaceOutputStandard o)
 {
-    FleshLook look = ComputeFlesh(IN.color, IN.furData, IN.vein);
+    FleshLook look = ComputeFlesh(IN.color, IN.furData, float2(IN.vein, 0));
     // Pas de poil sur la chair à nu
     clip(look.fur - 0.5);
 

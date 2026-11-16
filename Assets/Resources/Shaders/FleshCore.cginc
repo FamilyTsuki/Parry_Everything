@@ -31,9 +31,12 @@ half FurCoverage(half threshold)
     return saturate((_Fur * 1.1 - threshold) * 10);
 }
 
-FleshLook ComputeFlesh(float4 color, float4 furData, float vein)
+// vein.x : réseau de veines ; vein.y : 1 sur le bourrelet de chair des sutures entre membres (CatSutures)
+FleshLook ComputeFlesh(float4 color, float4 furData, float2 veinData)
 {
     FleshLook look;
+    float vein = veinData.x;
+    half lip = saturate(veinData.y);
     half fleshMask = color.a;   // 0 sur les coutures
 
     // Chair : abîmée, elle vire à vif (les coutures restent claires)
@@ -60,6 +63,8 @@ FleshLook ComputeFlesh(float4 color, float4 furData, float vein)
     half fleshGloss = _Glossiness * lerp(0.6, 1.0, fleshMask) + _Damage * 0.2 * fleshMask;
     look.smoothness = lerp(fleshGloss, _FurGlossiness, fur);
     look.emission = _EmissionColor.rgb + _Flash.xxx + _BleedColor.rgb * bleed * 0.25 + _InfectColor.rgb * veins * inf * 0.3;
+    // Suture d'un membre abîmé : le bourrelet à vif luit et pulse (plus voyant)
+    look.emission += _RawColor.rgb * lip * saturate(_Damage) * lerp(0.25, 0.5, pulse);
     look.fur = fur;
     return look;
 }

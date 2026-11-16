@@ -48,7 +48,7 @@ namespace ParryEverything.Editor
         internal static bool ExportFbx()
         {
             CatModelSettings s = CatModelBuilder.Settings;
-            if (!CatBlenderImport.TryBuild(s, out List<Mesh> list, out CatRig rig))
+            if (!CatBlenderImport.TryBuild(s, out List<Mesh> list, out CatRig rig, withSutures: false))
             {
                 list = new List<Mesh>(CatModelBuilder.BuildEditableMeshes(s).Values);
                 rig = CatModelBuilder.GeneratedRig(s);

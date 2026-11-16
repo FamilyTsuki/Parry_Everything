@@ -12,11 +12,15 @@ namespace ParryEverything.Editor
     //  - couleur des sommets de Blender = couleur de la fourrure ;
     //  - Unity refait dessous la chair cousue, les plaques de fourrure qui tombent et les veines ;
     //  - tête : yeux lumineux et truffe ajoutés (repères Eye et Nose s'ils existent, sinon places des réglages) ;
-    //  - patte : poids des os calculés autour des repères Knee et Ankle (pas d'armature à faire dans Blender).
+    //  - patte : poids des os calculés autour des repères Knee et Ankle (pas d'armature à faire dans Blender) ;
+    //  - sutures (CatSutures) : bourrelet à vif et points de fil à chaque jonction de membres détachables,
+    //    ajoutés au membre cousu (poitrine et bassin sur le ventre, tête et bras sur la poitrine, avant-bras,
+    //    main, cuisse, jarret, pied, queue sur leur parent).
     // Repère manquant : valeur des réglages. Pièce manquante : le modèle généré est gardé (message dans la console).
     public static class CatBlenderImport
     {
-        internal static bool TryBuild(CatModelSettings s, out List<Mesh> meshes, out CatRig rig)
+        // withSutures : faux pour l'export vers Blender (les sutures sont refaites par Unity, pas modelées)
+        internal static bool TryBuild(CatModelSettings s, out List<Mesh> meshes, out CatRig rig, bool withSutures = true)
         {
             meshes = null;
             rig = null;
@@ -110,8 +114,31 @@ namespace ParryEverything.Editor
             }
             meshes = new List<Mesh>();
 
+            // Sutures : surfaces des pièces dans l'espace du fichier (jonction = où l'enfant traverse son parent)
+            bool splitTorso = Child(torso, "Belly") != null;
+            var surfaces = new Dictionary<string, CatSutures.Surface>();
+            CatSutures.Surface SurfaceOf(Transform part)
+            {
+                if (part == null) return null;
+                if (!surfaces.TryGetValue(part.name, out CatSutures.Surface surface))
+                {
+                    surface = new CatSutures.Surface(Collect(part));
+                    surfaces[part.name] = surface;
+                }
+                return surface;
+            }
+            // Pièce qui porte la tête et les bras / les pattes et la queue (le torse entier s'il n'est pas découpé)
+            Transform chestPart = splitTorso ? Child(torso, "Chest") ?? torso : torso;
+            Transform pelvisPart = splitTorso ? Child(torso, "Pelvis") ?? torso : torso;
+            // toLocal : point du fichier → repère du maillage (Frame.Local, plus un recalage d'origine éventuel)
+            void Sew(Mesh mesh, System.Func<Vector3, Vector3> toLocal, Transform childPart, Transform parentPart, int seed)
+            {
+                if (!withSutures || childPart == null || parentPart == null) return;
+                CatSutures.Sew(s, mesh, SurfaceOf(childPart), SurfaceOf(parentPart), toLocal, seed);
+            }
+
             // Torse : en 3 objets (Chest, Belly, Pelvis) s'ils existent, sinon un seul (découpé ensuite par hauteur)
-            if (Child(torso, "Belly") != null)
+            if (splitTorso)
             {
                 foreach (string part in TorsoParts)
                 {
@@ -119,6 +146,8 @@ namespace ParryEverything.Editor
                     if (piece == null) continue;
                     Mesh mesh = Convert(torsoFrame, Collect(piece), "Flesh" + part);
                     Prepare(s, mesh, 1, s.patchCount);
+                    // Poitrine et bassin sont cousus sur le ventre
+                    if (part != "Belly") Sew(mesh, torsoFrame.Local, piece, Child(torso, "Belly"), part == "Chest" ? 1 : 2);
                     meshes.Add(mesh);
                 }
             }
@@ -133,6 +162,7 @@ namespace ParryEverything.Editor
             // Yeux modelés dans Blender (Eye_R, Eye_L...) : repris tels quels avec leurs couleurs, sinon générés.
             Mesh headMesh = Convert(headFrame, Collect(head), "CatHead");
             Prepare(s, headMesh, 11, 5);
+            Sew(headMesh, headFrame.Local, head, chestPart, 3);
             List<MeshFilter> eyePieces = CollectEyes(head);
             var face = new MeshDraft(2);
             CatModelBuilder.AddFace(s, face, rig.Eye, rig.Nose, eyePieces.Count == 0);
@@ -155,28 +185,38 @@ namespace ParryEverything.Editor
             rig.Elbow -= joint;
             rig.Shoulder += torsoFrame.Rel(upper.rotation) * joint;
             Prepare(s, upperMesh, 4, 3);
+            Sew(upperMesh, p => upperFrame.Local(p) - joint, upper, chestPart, 4);   // origine recalée sur l'épaule
             meshes.Add(upperMesh);
             // Avant-bras et main : deux membres (deux vies), maillages séparés dans le repère du coude.
             // Main = l'objet Hand rangé sous Forearm (et ses morceaux) ; sans lui, main vide (elle reste dans l'avant-bras)
-            Mesh foreMesh = Convert(new Frame(fore), Collect(fore), "CatForearm");
+            var foreFrame = new Frame(fore);
+            Mesh foreMesh = Convert(foreFrame, Collect(fore), "CatForearm");
             Prepare(s, foreMesh, 5, 3);
+            Sew(foreMesh, foreFrame.Local, fore, upper, 5);
             EnsureSubmeshes(foreMesh, 2);   // 2e matériau du prefab (griffes) : sous-mesh vide, les griffes sont dans le modèle
             meshes.Add(foreMesh);
             Transform hand = Child(fore, "Hand");
-            Mesh handMesh = hand != null ? Convert(new Frame(fore), Collect(hand), "CatHand") : new Mesh { name = "CatHand" };
-            if (hand != null) Prepare(s, handMesh, 6, 2);
+            Mesh handMesh = hand != null ? Convert(foreFrame, Collect(hand), "CatHand") : new Mesh { name = "CatHand" };
+            if (hand != null)
+            {
+                Prepare(s, handMesh, 6, 2);
+                Sew(handMesh, foreFrame.Local, hand, fore, 6);
+            }
             EnsureSubmeshes(handMesh, 2);
             meshes.Add(handMesh);
 
             // Patte : en 3 objets (Thigh, Shin, Foot) s'ils existent, sinon un seul (découpé ensuite par os)
             if (Child(leg, "Thigh") != null)
             {
-                foreach (string part in LegParts)
+                Transform previous = pelvisPart;   // cuisse cousue sur le bassin, jarret sur la cuisse, pied sur le jarret
+                for (int k = 0; k < LegParts.Length; k++)
                 {
-                    Transform piece = Child(leg, part);
+                    Transform piece = Child(leg, LegParts[k]);
                     if (piece == null) continue;
-                    Mesh mesh = Convert(legFrame, Collect(piece), "CatLeg" + part);
+                    Mesh mesh = Convert(legFrame, Collect(piece), "CatLeg" + LegParts[k]);
                     Prepare(s, mesh, 2, 4);
+                    Sew(mesh, legFrame.Local, piece, previous, 20 + k);   // avant les poids : la suture suit les os
+                    previous = piece;
                     SkinLeg(mesh, rig.Knee, rig.Ankle);
                     meshes.Add(mesh);
                 }
@@ -185,14 +225,17 @@ namespace ParryEverything.Editor
             {
                 Mesh legMesh = Convert(legFrame, Collect(leg), "CatLegSkin");
                 Prepare(s, legMesh, 2, 4);
+                Sew(legMesh, legFrame.Local, leg, pelvisPart, 20);
                 SkinLeg(legMesh, rig.Knee, rig.Ankle);
                 meshes.Add(legMesh);
             }
 
             for (int i = 0; i < tail.Count; i++)
             {
-                Mesh segMesh = Convert(new Frame(tail[i]), Collect(tail[i]), "CatTailSeg" + i);
+                var segFrame = new Frame(tail[i]);
+                Mesh segMesh = Convert(segFrame, Collect(tail[i]), "CatTailSeg" + i);
                 Prepare(s, segMesh, 7 + i, 3);
+                if (i == 0) Sew(segMesh, segFrame.Local, tail[0], pelvisPart, 7);   // queue entière cousue sur le bassin
                 meshes.Add(segMesh);
             }
             return true;

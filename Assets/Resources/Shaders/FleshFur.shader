@@ -37,14 +37,14 @@ Shader "Custom/FleshFur"
         {
             float4 color : COLOR;
             float4 furData;
-            float vein;
+            float2 vein;     // x : veines, y : bourrelet des sutures
         };
 
         void vert (inout appdata_full v, out Input o)
         {
             UNITY_INITIALIZE_OUTPUT(Input, o);
             o.furData = v.texcoord1;
-            o.vein = v.texcoord2.x;
+            o.vein = v.texcoord2.xy;
         }
 
         void surf (Input IN, inout SurfaceOutputStandard o)

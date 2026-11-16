@@ -138,6 +138,28 @@ namespace ParryEverything.Editor
         [Tooltip("En dessous : le bassin (porte les pattes et la queue). Entre les deux : le ventre, autour de l'âme.")]
         public float pelvisSplit = -0.2f;
 
+        [Header("Sutures entre les membres (modèle Blender)")]
+        // À chaque jonction de membres détachables : bourrelet de chair à vif + gros points de fil sombre,
+        // cousus à la va-vite. Ajoutés au membre cousu (il les emporte quand il est arraché). Voir CatSutures.
+        [Tooltip("Afficher les sutures.")]
+        public bool sutures = true;
+        [Tooltip("Écart moyen entre deux points de couture (mètres).")]
+        [Range(0.015f, 0.15f)] public float stitchSpacing = 0.045f;
+        [Tooltip("Longueur d'un point, en travers de la jonction (mètres).")]
+        [Range(0.01f, 0.15f)] public float stitchLength = 0.06f;
+        [Tooltip("Épaisseur du fil (mètres).")]
+        [Range(0.002f, 0.02f)] public float stitchThread = 0.0055f;
+        [Tooltip("Désordre : points de travers, mal espacés, de longueurs inégales, quelques trous.")]
+        [Range(0f, 1f)] public float stitchMess = 0.65f;
+        [Tooltip("Part des points doublés en croix.")]
+        [Range(0f, 1f)] public float stitchCross = 0.3f;
+        [Tooltip("Épaisseur du bourrelet de chair à vif le long de la jonction (mètres).")]
+        [Range(0f, 0.05f)] public float sutureLip = 0.014f;
+        [Tooltip("Fil des points (noir / brun foncé). Alpha 0 : ne vire pas à vif quand le membre est abîmé.")]
+        public Color threadColor = new Color(0.09f, 0.055f, 0.04f, 0f);
+        [Tooltip("Chair à vif du bourrelet (alpha 1 : saigne et vire à vif avec le membre).")]
+        public Color sutureFleshColor = new Color(0.5f, 0.05f, 0.06f, 1f);
+
         [Header("Torse — collerette")]
         // Touffes de poils clairs autour du haut du torse, sous la tête, qui retombent vers l'avant et le bas
         [Tooltip("Longueur des touffes de la collerette (0 : pas de collerette).")]

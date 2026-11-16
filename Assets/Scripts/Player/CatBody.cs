@@ -14,7 +14,7 @@ namespace ParryEverything.Player
     //    il s'écrase en retombant d'un saut. Démarrage et arrêt fondus.
     //  - Tête, bras, queue : accrochés au torse (points du CatTorsoRig), ils le suivent.
     //    La tête compense l'inclinaison du torse ; les bras balancent à l'opposé des pattes et se lèvent
-    //    pour parer ; la queue ondule, traîne derrière le mouvement, sa flamme vacille.
+    //    pour parer ; la queue ondule au repos, file et claque dans le vent du mouvement, fouette aux arrêts.
     // État de chaque membre (shader FleshLit) :
     //  - en bonne santé, il est couvert de fourrure ; abîmé, elle part par plaques et la chair cousue apparaît,
     //    puis vire à vif (_Fur, _Damage) ; presque arraché, il tremble ;
@@ -138,9 +138,31 @@ namespace ParryEverything.Player
         [SerializeField] private float armSharpness = 14f;        // vitesse de passage d'une pose à l'autre (air, parade, sol)
 
         [Header("Queue")]
-        [SerializeField] private float tailWave = 8f;             // ondulation (degrés par segment)
-        [SerializeField] private float tailWaveSpeed = 2.6f;
-        [SerializeField] private float tailDrag = 3f;             // la queue traîne derrière le mouvement (degrés par unité de vitesse)
+        // Queue continue (chaîne d'os, CatTailBuilder) : sa forme est une courbure le long de sa longueur, intégrée os par os.
+        // Au repos : elle enchaîne des gestes de chat (point d'interrogation, balayage lent, pause attentive, crochet qui
+        // bascule), fondus lentement l'un dans l'autre ; respiration, balancement en profondeur.
+        // Tout s'efface avec la vitesse.
+        // En mouvement : le vent (opposé à la vitesse, chute et saut compris) la couche dans son sens, elle claque à pleine
+        // vitesse. Chaque os suit sa cible avec un ressort plus mou vers le bout : les gestes partent de la base et
+        // arrivent au bout en retard, la queue fouette aux arrêts.
+        [SerializeField] private float tailIdle = 1f;             // force des gestes au repos (0 : queue immobile)
+        [SerializeField] private float tailIdleTempo = 1f;        // rythme des gestes (plus grand : plus vifs)
+        [SerializeField] private float tailGestureMin = 4f;       // durée d'un geste (s, tirée entre min et max)
+        [SerializeField] private float tailGestureMax = 8f;
+        [SerializeField] private float tailGestureBlend = 1.8f;   // fondu d'un geste au suivant (s)
+        [SerializeField] private float tailBreath = 3f;           // la queue monte et descend avec la respiration (degrés)
+        [SerializeField] private float tailDepth = 7f;            // balancement vers / loin de la caméra (degrés, au bout)
+        [SerializeField] private float tailWaveSpeed = 2.6f;      // rythme de base du claquement (s'y ajoute tailFlutterSpeed)
+        [SerializeField] private float tailWind = 0.12f;          // prise au vent (part couchée = k·v² / (k·v² + 1))
+        [Range(0f, 1f)] [SerializeField] private float tailMaxStream = 0.95f;   // au plus, part de l'écart rattrapée vers le vent
+        [SerializeField] private float tailMaxBend = 110f;        // décalage maximal d'un os par rapport au repos (degrés)
+        [SerializeField] private float tailFullSpeed = 6f;        // vitesse de plein vent (m/s) : claquement et rafales au maximum
+        [SerializeField] private float tailFlutter = 16f;         // claquement à pleine vitesse (degrés, au bout)
+        [SerializeField] private float tailFlutterSpeed = 16f;    // rythme ajouté au claquement à pleine vitesse
+        [SerializeField] private float tailGust = 10f;            // rafales irrégulières à pleine vitesse (degrés, au bout)
+        [SerializeField] private float tailStiffness = 70f;       // rappel du ressort à la base (plus petit : queue plus molle)
+        [SerializeField] private float tailDamping = 9f;          // amortissement (plus petit : fouette plus longtemps)
+        [Range(0.05f, 1f)] [SerializeField] private float tailTipSoftness = 0.3f;   // raideur du bout par rapport à la base
 
         [Header("État des membres")]
         [Range(0f, 1f)] [SerializeField] private float furFullAbove = 0.85f;   // vie au-dessus : fourrure intacte
@@ -193,6 +215,13 @@ namespace ParryEverything.Player
             public Quaternion restRoot = Quaternion.identity;     // tête, bras (côté loin : en miroir)
             public Quaternion restElbow = Quaternion.identity;
             public Quaternion[] restTail;
+            // Queue : par segment, direction de repos (degrés, repère du torse), décalage du ressort et sa vitesse
+            public float[] tailRestAngle, tailBend, tailBendVel;
+            public float tailPhase;         // phase du claquement (son rythme change avec la vitesse)
+            public int tailGesture, tailNextGesture;   // geste en cours et suivant (TailGestures)
+            public float tailGestureTimer;  // temps restant avant de passer au geste suivant (s)
+            public float tailGestureBlend = 1f;   // 0 → 1 : fondu du geste en cours vers le suivant
+            public float tailIdleClock;     // horloge des gestes (avance au rythme tailIdleTempo)
         }
 
         // Pieds du joueur sous son centre (bas du collider) : le sol du fichier Blender est à cette hauteur
@@ -215,7 +244,6 @@ namespace ParryEverything.Player
         private CatTorsoRig torsoRig;
         private LimbView torsoView;         // vue de la chair : les autres membres s'y accrochent
         private float torsoTilt;            // inclinaison du torse ce frame (degrés, repère « regarde à droite »)
-        private float tailDragAngle, tailDragVel;
         private readonly Dictionary<Limb, LimbView> views = new Dictionary<Limb, LimbView>();
         private readonly GeneratedObjects generated = new GeneratedObjects();
         private MaterialPropertyBlock block;
@@ -330,7 +358,6 @@ namespace ParryEverything.Player
             else roll = Mathf.LerpAngle(roll, 0f, 1f - Mathf.Exp(-8f * dt));
             flash = Mathf.MoveTowards(flash, 0f, Time.unscaledDeltaTime / Mathf.Max(0.01f, parryFlashTime));
             UpdateBodyMotion(dt, facing, vel, grounded, moving);
-            UpdateTailDrag(dt, facing, vel);
             float hop = 0f;
 
             // Le torse d'abord : les autres membres sont placés dans son repère
@@ -364,7 +391,7 @@ namespace ParryEverything.Player
                     case LimbKind.Leg: PlaceLeg(limb, view, facing, grounded, vel, shake, dt); break;
                     case LimbKind.Head: PlaceHead(view, shake); break;
                     case LimbKind.Arm: PlaceArm(view, grounded, shake, dt); break;
-                    case LimbKind.Tail: PlaceTail(view, shake); break;
+                    case LimbKind.Tail: PlaceTail(view, shake, vel, dt); break;
                 }
             }
         }
@@ -553,8 +580,53 @@ namespace ParryEverything.Player
             view.trail = Mathf.Clamp(view.trail + view.trailVel * dtc, -30f, maxArmTrail);
         }
 
-        // Queue : garde sa courbe de repos, ondule (vague qui part de la base), traîne derrière le mouvement
-        private void PlaceTail(LimbView view, float shake)
+        // Gestes de la queue au repos. Courbures en degrés pour toute la longueur de la queue.
+        // Signes : « lift » > 0 lève la base, « hook » > 0 enroule le bout vers l'avant (crochet du point d'interrogation).
+        private struct TailGesture
+        {
+            public float lift;        // base levée (degrés)
+            public float hook;        // crochet du bout (degrés de courbure sur le dernier tiers)
+            public float hookSway;    // le crochet bascule lentement d'un côté à l'autre (amplitude, degrés)
+            public float wave;        // vague de courbure qui descend vers le bout (degrés sur la longueur)
+            public float waves;       // nombre de vagues le long de la queue
+
+            public static TailGesture Lerp(TailGesture a, TailGesture b, float t)
+            {
+                return new TailGesture
+                {
+                    lift = Mathf.Lerp(a.lift, b.lift, t),
+                    hook = Mathf.Lerp(a.hook, b.hook, t),
+                    hookSway = Mathf.Lerp(a.hookSway, b.hookSway, t),
+                    wave = Mathf.Lerp(a.wave, b.wave, t),
+                    waves = Mathf.Lerp(a.waves, b.waves, t),
+                };
+            }
+        }
+
+        private static readonly TailGesture[] TailGestures =
+        {
+            // Point d'interrogation : base levée, bout en crochet qui bascule doucement
+            new TailGesture { lift = 10f, hook = 95f, hookSway = 30f, wave = 45f, waves = 0.8f },
+            // Balayage lent et ample : une grande vague la parcourt
+            new TailGesture { lift = -3f, hook = 30f, hookSway = 12f, wave = 180f, waves = 0.9f },
+            // Pause attentive : presque immobile, la queue repose dans sa courbe
+            new TailGesture { lift = 4f, hook = 50f, hookSway = 6f, wave = 14f, waves = 1.2f },
+            // Crochet qui bascule : le bout passe lentement d'un côté à l'autre
+            new TailGesture { lift = 2f, hook = 20f, hookSway = 80f, wave = 30f, waves = 0.7f },
+        };
+
+        // Queue : courbe de repos du fichier + gestes au repos + vent du mouvement.
+        // Chaque os k a un décalage « absolu » (par rapport à sa direction de repos, repère du torse) :
+        //  - cible = somme des plis des os 0..k (gestes, courbure intégrée le long de la queue : courbe lisse)
+        //            + vent : la part couchée croît avec v², plus forte vers le bout ;
+        //  - ressort vers cette cible, de plus en plus mou vers le bout : les gestes partent de la base et arrivent au
+        //    bout en retard ; la queue fouette aux arrêts, demi-tours, sauts, atterrissages ;
+        //  - par-dessus, directement : claquement et rafales de la course.
+        // Rotation locale d'un os = son décalage moins celui de l'os précédent (les rotations s'enchaînent).
+        // Une rotation Z positive tourne l'os dans le sens trigonométrique (repère « regarde à droite ») ; la queue
+        // pointe vers l'arrière, donc une rotation négative la lève / l'enroule vers l'avant.
+        // La rotation Y la balance vers la caméra ou loin d'elle.
+        private void PlaceTail(LimbView view, float shake, Vector3 vel, float dt)
         {
             CatTorsoRig rig = TorsoRig;
             if (rig != null) view.root.localPosition = rig.TailBase;
@@ -562,30 +634,121 @@ namespace ParryEverything.Player
             if (view.tailJoints == null) return;
 
             int n = view.tailJoints.Length;
-            float time = Time.time * tailWaveSpeed;
-            for (int i = 0; i < n; i++)
+            EnsureTailState(view, n);
+
+            // Vent ressenti, dans le repère du torse (il suit le demi-tour et l'inclinaison) : opposé au mouvement
+            Transform torso = view.root.parent;
+            Vector3 wind = torso != null ? torso.InverseTransformDirection(-vel) : -vel;
+            float speed = new Vector2(wind.x, wind.y).magnitude;
+            float windAngle = Mathf.Atan2(wind.y, wind.x) * Mathf.Rad2Deg;
+            float pressure = tailWind * speed * speed;
+            float stream = tailMaxStream * pressure / (pressure + 1f);
+            float full = Mathf.Clamp01(speed / Mathf.Max(0.1f, tailFullSpeed));
+            view.tailPhase += dt * (tailWaveSpeed + tailFlutterSpeed * full);
+            float dtc = Mathf.Min(dt, 0.05f);
+
+            // Repos : geste en cours (fondu vers le suivant), s'efface quand le vent prend le relais
+            float idle = (1f - full) * tailIdle;
+            TailGesture g = UpdateTailGesture(view, dt);
+            view.tailIdleClock += dt * tailIdleTempo;
+            float clock = view.tailIdleClock;
+            float time = Time.time;
+            float hook = g.hook + g.hookSway * Mathf.Sin(clock * 0.75f + 0.8f) + g.hookSway * 0.3f * Mathf.Sin(clock * 1.9f);
+            float lift = g.lift + tailBreath * Mathf.Sin(time * 2.2f);   // même rythme que la respiration du corps
+            float wavePhase = clock * 1.75f;                                // ≈ 3,6 s par vague
+            float ds = 1f / n;
+
+            float fold = 0f;                 // courbure intégrée : décalage d'idle de l'os k
+            float previous = 0f, previousDepth = 0f;
+            float shakePerBone = shake * 70f / n;
+            for (int k = 0; k < n; k++)
             {
-                float along = (i + 1f) / n;
-                // Segment orienté vers −X : une rotation Z négative le fait monter.
+                float s = (k + 0.5f) / n;    // place de l'os le long de la queue (0 base, 1 bout)
+                float tip = TipCurve(s);     // courbure du dernier tiers (intégrale 1 sur la queue)
+
+                // Pli de l'os k (degrés) : base levée, crochet du bout, vague qui descend vers le bout
+                float bendHere = (k == 0 ? -lift : 0f)
+                                 - hook * tip * ds
+                                 + g.wave * Mathf.Sin(wavePhase - Mathf.PI * 2f * g.waves * s) * Mathf.Lerp(0.35f, 1f, s) * ds;
+                fold += bendHere * idle;
+
+                // Vent : la queue se couche dans son sens (le bout plus que la base)
+                float windGoal = speed > 0.01f
+                    ? stream * Mathf.Lerp(0.6f, 1f, s) * Mathf.DeltaAngle(view.tailRestAngle[k], windAngle)
+                    : 0f;
+                float goal = Mathf.Clamp(fold + windGoal, -tailMaxBend, tailMaxBend);
+
+                // Ressort de plus en plus mou vers le bout (retard, léger dépassement)
+                float stiff = tailStiffness * Mathf.Lerp(1f, tailTipSoftness, s);
+                float damp = tailDamping * Mathf.Sqrt(stiff / Mathf.Max(0.01f, tailStiffness));
+                view.tailBendVel[k] += (stiff * (goal - view.tailBend[k]) - damp * view.tailBendVel[k]) * dtc;
+                view.tailBend[k] = Mathf.Clamp(view.tailBend[k] + view.tailBendVel[k] * dtc, -tailMaxBend, tailMaxBend);
+
+                // Directement : claquement et rafales de la course
+                float flutter = Mathf.Sin(view.tailPhase - Mathf.PI * 2f * 1.2f * s) * tailFlutter * full * s;
+                float gust = (Mathf.PerlinNoise(time * 3f, view.phaseOffset * 5f + s * 2.5f) - 0.5f) * 2f * tailGust * full * s;
+                float bend = view.tailBend[k] + flutter + gust;
+
+                // Profondeur : lent balancement vers la caméra et loin d'elle
+                float depth = tailDepth * s * Mathf.Sin(clock * 1.3f + 0.7f - Mathf.PI * 1.2f * s) * idle;
+
                 // La base compense la moitié du basculement du torse
-                float angle = (i == 0 ? -TiltOffRest * 0.5f : 0f)
-                              + Mathf.Sin(time - i * 0.7f) * tailWave * along
-                              + tailDragAngle / n
-                              + shake * 10f;
-                Quaternion rest = view.restTail != null && i < view.restTail.Length ? view.restTail[i] : Quaternion.identity;
-                view.tailJoints[i].localRotation = Quaternion.Euler(0f, 0f, angle) * rest;
+                float angle = bend - previous + (k == 0 ? -TiltOffRest * 0.5f : 0f) + shakePerBone;
+                float yaw = depth - previousDepth;
+                previous = bend;
+                previousDepth = depth;
+                Quaternion rest = view.restTail != null && k < view.restTail.Length ? view.restTail[k] : Quaternion.identity;
+                view.tailJoints[k].localRotation = Quaternion.Euler(0f, yaw, angle) * rest;
             }
         }
 
-        // La queue traîne derrière le mouvement : ressort sur la vitesse (repère « regarde à droite »)
-        private void UpdateTailDrag(float dt, float facing, Vector3 vel)
+        // Répartition du crochet sur la queue : en cloche sur les 60 % du bout (nulle avant, maximale vers 70 %,
+        // le tout dernier bout presque droit) : le crochet s'arrondit au lieu de casser. Intégrale ≈ 1 sur [0, 1].
+        private static float TipCurve(float s)
         {
-            if (dt <= 0f) return;
-            // Avancer vite la rabaisse à l'horizontale ; tomber la relève ; sauter la rabat
-            float goal = Mathf.Clamp(vel.x * facing * tailDrag + vel.y * tailDrag * 1.5f, -60f, 60f);
-            float dtc = Mathf.Min(dt, 0.05f);
-            tailDragVel += ((goal - tailDragAngle) * 40f - tailDragVel * 8f) * dtc;
-            tailDragAngle += tailDragVel * dtc;
+            const float from = 0.4f;
+            if (s <= from) return 0f;
+            float x = (s - from) / (1f - from);
+            float bell = Mathf.Sin(Mathf.PI * Mathf.Pow(x, 0.8f));
+            return bell * bell / (0.5f * (1f - from));
+        }
+
+        // Geste en cours, fondu (ease-in/ease-out) vers le suivant ; un nouveau geste est tiré quand le temps est écoulé
+        private TailGesture UpdateTailGesture(LimbView view, float dt)
+        {
+            view.tailGestureTimer -= dt;
+            if (view.tailGestureBlend >= 1f && view.tailGestureTimer <= 0f)
+            {
+                view.tailGesture = view.tailNextGesture;
+                int next = UnityEngine.Random.Range(0, TailGestures.Length - 1);
+                view.tailNextGesture = next >= view.tailGesture ? next + 1 : next;   // jamais deux fois le même
+                view.tailGestureBlend = 0f;
+                view.tailGestureTimer = UnityEngine.Random.Range(tailGestureMin, Mathf.Max(tailGestureMin, tailGestureMax));
+            }
+            if (view.tailGestureBlend < 1f) view.tailGestureBlend = Mathf.Min(1f, view.tailGestureBlend + dt / Mathf.Max(0.05f, tailGestureBlend));
+            float t = view.tailGestureBlend;
+            float ease = t * t * t * (t * (t * 6f - 15f) + 10f);   // départ et arrivée tout en douceur
+            return TailGesture.Lerp(TailGestures[view.tailGesture], TailGestures[view.tailNextGesture], ease);
+        }
+
+        // Direction de repos de chaque os (degrés, repère du torse ; os orienté vers −X dans son repère)
+        private void EnsureTailState(LimbView view, int n)
+        {
+            if (view.tailBend != null && view.tailBend.Length == n) return;
+            view.tailBend = new float[n];
+            view.tailBendVel = new float[n];
+            view.tailRestAngle = new float[n];
+            view.tailGesture = view.tailNextGesture = UnityEngine.Random.Range(0, TailGestures.Length);
+            view.tailGestureBlend = 1f;
+            view.tailGestureTimer = UnityEngine.Random.Range(tailGestureMin, Mathf.Max(tailGestureMin, tailGestureMax));
+            view.tailIdleClock = UnityEngine.Random.Range(0f, 20f);
+            Quaternion chain = view.root.localRotation;
+            for (int i = 0; i < n; i++)
+            {
+                chain *= view.restTail != null && i < view.restTail.Length ? view.restTail[i] : Quaternion.identity;
+                Vector3 dir = chain * Vector3.left;
+                view.tailRestAngle[i] = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+            }
         }
 
         // Cycle de marche et mouvement du corps debout
@@ -1114,13 +1277,14 @@ namespace ParryEverything.Player
             view.restRoot = side > 0 ? MirrorDepth(t.localRotation) : t.localRotation;
             if (view.elbow != null) view.restElbow = view.elbow.localRotation;
 
-            // Queue : chaîne Seg0 → Seg1 → ...
+            // Queue : chaîne d'os Bone0 → Bone1 → ... (queue continue), sinon ancienne chaîne Seg0 → Seg1 → ...
             var joints = new List<Transform>();
-            Transform seg = t.Find("Seg0");
+            string jointName = t.Find("Bone0") != null ? "Bone" : "Seg";
+            Transform seg = t.Find(jointName + "0");
             while (seg != null)
             {
                 joints.Add(seg);
-                seg = seg.Find("Seg" + joints.Count);
+                seg = seg.Find(jointName + joints.Count);
             }
             if (joints.Count > 0)
             {

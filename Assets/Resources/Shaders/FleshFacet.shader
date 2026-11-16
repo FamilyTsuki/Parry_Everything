@@ -39,7 +39,7 @@ Shader "Custom/FleshFacet"
         {
             float4 color : COLOR;
             float4 furData;
-            float vein;
+            float2 vein;     // x : veines, y : bourrelet des sutures
             float3 worldPos;
             float3 worldNormal;
         };
@@ -69,7 +69,7 @@ Shader "Custom/FleshFacet"
         {
             UNITY_INITIALIZE_OUTPUT(Input, o);
             o.furData = v.texcoord1;
-            o.vein = v.texcoord2.x;
+            o.vein = v.texcoord2.xy;
         }
 
         void surf (Input IN, inout SurfaceOutputFacet o)

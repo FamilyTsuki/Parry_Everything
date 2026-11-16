@@ -5,6 +5,8 @@
 //   UV1 (TEXCOORD1)   : rgb = couleur de la fourrure, a = seuil (0 à 1) : la fourrure de ce sommet
 //                       disparaît quand _Fur passe sous ce seuil → elle part par plaques.
 //   UV2 (TEXCOORD2).x : réseau de veines (0 à 1), révélé par l'infection.
+//   UV2 (TEXCOORD2).y : 1 sur le bourrelet de chair des sutures entre membres (luit quand le membre est abîmé).
+//   Sutures : UV1.a = 2 (jamais de fourrure) ; fil des points en alpha 0 (reste sombre).
 //
 // Réglages par membre (CatBody, via MaterialPropertyBlock) :
 //   _Fur       1 = fourrure intacte, 0 = toute la chair cousue à nu (suit la vie du membre)
@@ -45,14 +47,14 @@ Shader "Custom/FleshLit"
         {
             float4 color : COLOR;
             float4 furData;   // rgb fourrure, a seuil
-            float vein;
+            float2 vein;     // x : veines, y : bourrelet des sutures
         };
 
         void vert (inout appdata_full v, out Input o)
         {
             UNITY_INITIALIZE_OUTPUT(Input, o);
             o.furData = v.texcoord1;
-            o.vein = v.texcoord2.x;
+            o.vein = v.texcoord2.xy;
         }
 
         void surf (Input IN, inout SurfaceOutputStandard o)
