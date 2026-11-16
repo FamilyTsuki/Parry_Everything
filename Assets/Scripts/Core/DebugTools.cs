@@ -54,7 +54,7 @@ namespace ParryEverything.Core
                 switch (body.Form)
                 {
                     case PlayerForm.Soul:
-                        body.GrantFlesh(Limb.Flesh(testFleshLife));
+                        body.GrantFlesh(Limb.Torso(testFleshLife));
                         Say("Boule de chair");
                         break;
                     case PlayerForm.Ball:

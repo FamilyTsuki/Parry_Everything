@@ -149,7 +149,7 @@ namespace ParryEverything.Boss
             while (!visionDone) yield return null;
 
             // Pendant le blanc de fin de vision : la chair enferme l'âme, le tas se réduit, la zone se rallume
-            player.GrantFlesh(Limb.Flesh(fleshLife));
+            player.GrantFlesh(Limb.Torso(fleshLife));
             baseScale = remainsScale;
             if (Atmosphere.Current != null) Atmosphere.Current.Rekindle();
             ParticleBurst.Spawn("FleshWraps", player.transform.position, new ParticleSystem.MinMaxGradient(fleshColor, emberColor), 90,

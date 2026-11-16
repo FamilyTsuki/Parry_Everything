@@ -31,11 +31,14 @@ namespace ParryEverything.Player
             go.transform.position = pickup.restPosition;
             go.transform.rotation = Quaternion.Euler(0f, 0f, 90f + Random.Range(-25f, 25f));
 
-            // Patte couchée au sol, ou chair éclatée (un gros morceau)
+            // Membre couché au sol, ou partie du torse (un gros morceau de chair) ; le pied est un petit bout
             GameObject mesh = new GameObject("Mesh");
             mesh.transform.SetParent(go.transform, false);
-            bool flesh = limb.Kind == LimbKind.Flesh;
-            mesh.transform.localScale = flesh ? new Vector3(0.5f, 0.6f, 0.45f) : new Vector3(0.08f, 0.42f, 0.08f);
+            bool flesh = limb.IsTorsoPart;
+            float length = limb.Kind == LimbKind.Foot || limb.Kind == LimbKind.Hand ? 0.18f
+                : limb.Kind == LimbKind.Shin || limb.Kind == LimbKind.Leg || limb.Kind == LimbKind.Forearm ? 0.3f : 0.42f;
+            float bulk = limb.Kind == LimbKind.Flesh ? 1f : 0.7f;
+            mesh.transform.localScale = flesh ? new Vector3(0.5f, 0.6f, 0.45f) * bulk : new Vector3(0.08f, length, 0.08f);
             mesh.transform.localPosition = flesh ? new Vector3(0f, 0.15f, 0f) : new Vector3(0f, 0.2f, 0f);
             mesh.AddComponent<MeshFilter>().sharedMesh = flesh ? CatBody.LumpMesh : CatBody.LegMesh;
             pickup.material = MaterialFactory.Lit(new Color(0.6f, 0.1f, 0.1f));

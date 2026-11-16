@@ -39,25 +39,14 @@ Shader "Custom/FleshLit"
         #pragma surface surf Standard fullforwardshadows vertex:vert
         #pragma target 3.0
 
+        #include "FleshCore.cginc"
+
         struct Input
         {
             float4 color : COLOR;
             float4 furData;   // rgb fourrure, a seuil
             float vein;
         };
-
-        fixed4 _Color;
-        fixed4 _RawColor;
-        fixed4 _BleedColor;
-        fixed4 _InfectColor;
-        half _Fur;
-        half _Damage;
-        half _Bleed;
-        half _Infection;
-        half _Flash;
-        half _Glossiness;
-        half _FurGlossiness;
-        fixed4 _EmissionColor;
 
         void vert (inout appdata_full v, out Input o)
         {
@@ -68,33 +57,11 @@ Shader "Custom/FleshLit"
 
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
-            half fleshMask = IN.color.a;   // 0 sur les coutures
-
-            // Chair : abîmée, elle vire à vif (les coutures restent claires)
-            fixed3 flesh = IN.color.rgb * _Color.rgb;
-            flesh = lerp(flesh, _RawColor.rgb, saturate(_Damage) * fleshMask);
-
-            // Fourrure : couvre la chair là où son seuil est sous _Fur (bord net, un peu adouci)
-            half fur = saturate((_Fur * 1.1 - IN.furData.a) * 10);
-            fixed3 c = lerp(flesh, IN.furData.rgb * _Color.rgb, fur);
-
-            // Hémorragie : la chair à nu rougit et pulse ; la fourrure se tache
-            half pulse = 0.5 + 0.5 * sin(_Time.y * 6.0);
-            half bleed = saturate(_Bleed) * lerp(0.35, 0.6, pulse) * lerp(fleshMask, 0.4, fur);
-            c = lerp(c, _BleedColor.rgb, bleed);
-
-            // Infection : le réseau de veines apparaît, de plus en plus étendu, et la teinte devient malade
-            half inf = saturate(_Infection);
-            half veins = saturate((IN.vein - (1.0 - inf * 0.75)) * 6.0) * step(0.001, inf);
-            c = lerp(c, c * fixed3(0.8, 0.75, 0.95), inf * 0.4);
-            c = lerp(c, _InfectColor.rgb, veins * 0.85);
-
-            o.Albedo = lerp(c, fixed3(1, 1, 1), _Flash);
+            FleshLook look = ComputeFlesh(IN.color, IN.furData, IN.vein);
+            o.Albedo = look.albedo;
             o.Metallic = 0;
-            // Chair humide (plus brillante à vif) ; fourrure mate
-            half fleshGloss = _Glossiness * lerp(0.6, 1.0, fleshMask) + _Damage * 0.2 * fleshMask;
-            o.Smoothness = lerp(fleshGloss, _FurGlossiness, fur);
-            o.Emission = _EmissionColor.rgb + _Flash.xxx + _BleedColor.rgb * bleed * 0.25 + _InfectColor.rgb * veins * inf * 0.3;
+            o.Smoothness = look.smoothness;
+            o.Emission = look.emission;
         }
         ENDCG
     }

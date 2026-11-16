@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using ParryEverything.Core;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -21,6 +22,7 @@ namespace ParryEverything.Player
         [SerializeField] private float runSpeed = 6.0f;                 // debout sur 2 pattes, Maj gauche
         [Range(0f, 1f)] [SerializeField] private float oneLegSpeedFactor = 0.55f;    // une seule patte : il sautille
         [Range(0f, 1f)] [SerializeField] private float oneLegJumpFactor = 0.5f;      // une seule patte : saut réduit
+        [Range(0f, 1f)] [SerializeField] private float missingFootSpeedFactor = 0.8f; // par pied perdu : il boite sur son moignon
 
         [Header("Boule de chair : lourde, roule")]
         [SerializeField] private float ballSpeed = 4.2f;
@@ -436,7 +438,7 @@ namespace ParryEverything.Player
             box.center = baseBoxCenter + Vector3.up * ((height - baseBoxSize.y) * 0.5f);
         }
 
-        // Vitesse selon la forme : âme lente, boule, debout (course, une seule patte)
+        // Vitesse selon la forme : âme lente, boule, debout (course, une seule patte, pied perdu)
         private float CurrentSpeed()
         {
             switch (Form)
@@ -444,8 +446,9 @@ namespace ParryEverything.Player
                 case PlayerForm.Soul: return soulSpeed;
                 case PlayerForm.Ball: return ballSpeed;
                 default:
-                    if (IsRunning) return runSpeed;
-                    return body.IntactLegCount >= 2 ? bodySpeed : bodySpeed * oneLegSpeedFactor;
+                    float limp = Mathf.Pow(missingFootSpeedFactor, body.MissingFootCount);
+                    if (IsRunning) return runSpeed * limp;
+                    return (body.IntactLegCount >= 2 ? bodySpeed : bodySpeed * oneLegSpeedFactor) * limp;
             }
         }
 
@@ -468,18 +471,13 @@ namespace ParryEverything.Player
                 return;
             }
 
-            // Chute ratée : une patte au hasard est arrachée
-            int intact = body.IntactLegCount;
-            int pick = Random.Range(0, intact);
+            // Chute ratée : une patte au hasard est arrachée à la cuisse (jarret et pied tombent avec)
+            var thighs = new List<Limb>();
             foreach (Limb limb in body.Limbs)
             {
-                if (limb.IsTorn || limb.Kind != LimbKind.Leg) continue;
-                if (pick-- == 0)
-                {
-                    body.TearLimb(limb);
-                    break;
-                }
+                if (!limb.IsTorn && limb.Kind == LimbKind.Leg) thighs.Add(limb);
             }
+            if (thighs.Count > 0) body.TearLimb(thighs[Random.Range(0, thighs.Count)]);
             perfectChain.Reset();
             FeelHurt(20f, feet);
             GameCamera.ShakeMain(shakeDuration + 0.1f, shakeMagnitude + 0.2f);

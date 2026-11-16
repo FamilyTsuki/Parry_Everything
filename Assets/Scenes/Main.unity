@@ -4629,6 +4629,7 @@ GameObject:
   - component: {fileID: 1834448052}
   - component: {fileID: 1834448053}
   - component: {fileID: 1834448054}
+  - component: {fileID: 1834448055}
   m_Layer: 0
   m_Name: player
   m_TagString: Untagged
@@ -4653,6 +4654,7 @@ MonoBehaviour:
   runSpeed: 6
   oneLegSpeedFactor: 0.55
   oneLegJumpFactor: 0.5
+  missingFootSpeedFactor: 0.8
   ballSpeed: 4.2
   ballAcceleration: 9
   ballDeceleration: 5
@@ -4899,19 +4901,15 @@ MonoBehaviour:
   headPrefab: {fileID: 7526301118249170449, guid: 272b3ff2eeb077855a9f2b541636455e, type: 3}
   tailPrefab: {fileID: 7757155907763590256, guid: 3eb4fe03450cad60192e35f6cd1215d0, type: 3}
   ballHeight: -0.08
-  standingBallHeight: 0.72
   hipHeight: 0.3
-  standingTilt: 22
-  legSplay: 10
   morphSpeed: 3
   turnSpeed: 900
-  ankleHeight: 0.07
   toeOff: 30
   airToeDown: 35
-  strideMin: 0.82
+  strideMin: 1.1
   stridePerSpeed: 0.12
-  strideMax: 1.4
-  maxReach: 0.72
+  strideMax: 1.9
+  maxReach: 0.97
   dutyFactor: 0.5
   stepHeight: 0.25
   walkFade: 5
@@ -4922,32 +4920,51 @@ MonoBehaviour:
   runBlendTo: 5.5
   runStepHeight: 0.34
   runRise: 0.16
+  walkLean: 4
+  runLean: 4
+  overspeedLean: 1
+  accelLean: 1.2
+  maxLean: 26
+  maxBrakeLean: 10
+  leanResponse: 6
+  hopDuty: 0.35
+  hopRateSlow: 1.9
+  hopRateFast: 3.2
+  hopFastSpeed: 6
+  hopHeight: 2.5
+  hopSquat: 0.12
+  hopTilt: 12
+  hopImpact: 0.6
+  hopTuck: 0.12
   stepRise: 0.11
   landImpact: 0.9
   bodySpringStiffness: 140
   bodySpringDamping: 13
   squash: 1.2
-  runLean: 4
-  stepPitch: 10
+  shoulderSwing: 0.03
   breathing: 0.012
-  oneLegHop: 2.5
   headLevel: 0.85
   headNod: 35
   headBob: 3
-  armHang: 0.6
-  armSwing: 30
-  runArmSwing: 55
-  elbowBend: 25
-  runElbowBend: 70
+  armHang: 1
+  walkSwing: 16
+  armBackRatio: 0.65
+  walkElbow: 12
+  elbowPump: 4
+  armDrag: 0.3
+  maxArmTrail: 80
+  armStiffness: 40
+  armDamping: 5
+  armBounce: 1
+  armFlutter: 4
+  limpElbow: 15
+  elbowFlop: 0.12
   parryArmAngle: 95
   airArmAngle: 55
   armSharpness: 14
-  tailLift: 25
-  tailCurl: 9
   tailWave: 8
   tailWaveSpeed: 2.6
   tailDrag: 3
-  flameFlicker: 0.25
   furFullAbove: 0.85
   furGoneBelow: 0.15
   hypertrophyScale: 1.25
@@ -4959,6 +4976,26 @@ MonoBehaviour:
   fillIntensity: 1.6
   fillRange: 3
   fillOffset: {x: 0.3, y: 0.5, z: -1.1}
+--- !u!114 &1834448055
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1834448045}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 56c8506eb493a9d7fb000401b9863354, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: ParryEverything::ParryEverything.Player.BodyHud
+  heightAt1080p: 230
+  margin: 24
+  healthy: {r: 0.78, g: 0.84, b: 0.95, a: 1}
+  hurt: {r: 1, g: 0.55, b: 0.15, a: 1}
+  critical: {r: 0.85, g: 0.08, b: 0.08, a: 1}
+  tornColor: {r: 0.25, g: 0.25, b: 0.3, a: 0.45}
+  outlineColor: {r: 0.03, g: 0.03, b: 0.06, a: 0.85}
+  hitFlashTime: 0.35
 --- !u!1 &2027000101
 GameObject:
   m_ObjectHideFlags: 0

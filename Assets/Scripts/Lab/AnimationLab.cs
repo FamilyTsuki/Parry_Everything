@@ -9,7 +9,7 @@ namespace ParryEverything.Lab
     // Panneau à gauche :
     //  - Temps  : pause, image par image, ralenti (n'écrase pas les arrêts du temps du jeu) ;
     //  - Chat   : forme (âme, boule, debout, une patte, complet), bras / tête / queue un par un,
-    //             marche / course auto en aller-retour, saut, parade, coup reçu,
+    //             allure sur place (tapis roulant : de l'arrêt à très vite), saut, parade, coup reçu,
     //             vie et effet de chaque membre (pour voir fourrure, chair cousue, hémorragie, infection, hypertrophie) ;
     //  - Boss   : phase I à V, chaque geste, rejouer en boucle ;
     //  - Caméra : cible et angle (clic droit : tourner, molette : zoom, clic molette : décaler).
@@ -20,7 +20,7 @@ namespace ParryEverything.Lab
         [SerializeField] private float testLegLife = 40f;
         [SerializeField] private float testPartLife = 30f;      // bras, tête, queue
         [SerializeField] private float hurtDamage = 6f;
-        [SerializeField] private float walkRange = 4f;          // aller-retour de la marche auto autour du départ
+        [SerializeField] private float maxTreadmillSpeed = 20f; // allure maximale du curseur (m/s ; course du jeu : 6)
         [SerializeField] private float panelWidth = 320f;
 
         private enum Focus { Cat, Boss, Both }
@@ -47,11 +47,11 @@ namespace ParryEverything.Lab
 
         private PlayerBody body;
         private PlayerController controller;
+        private CatBody catBody;
         private HellGuardian boss;
         private LabCamera cam;
         private Vector3 playerHome;
-        private int walkMode;           // 0 : arrêt, 1 : marche, 2 : course
-        private float walkDir = 1f;
+        private float treadmillSpeed;   // allure sur place (m/s), 0 : arrêt (le chat reste jouable au clavier)
         private bool paused;
         private bool stepping;
         private int speedIndex = Speeds.Length - 1;
@@ -67,6 +67,7 @@ namespace ParryEverything.Lab
         {
             body = FindFirstObjectByType<PlayerBody>();
             controller = FindFirstObjectByType<PlayerController>();
+            catBody = FindFirstObjectByType<CatBody>();
             boss = FindFirstObjectByType<HellGuardian>();
             cam = FindFirstObjectByType<LabCamera>();
             if (body != null)
@@ -80,8 +81,7 @@ namespace ParryEverything.Lab
 
         private void OnDisable()
         {
-            GameInput.MoveOverride = null;
-            GameInput.SimulateHold(GameAction.Run, false);
+            if (catBody != null) catBody.TreadmillSpeed = null;
             TimeControl.SetInspectScale(1f);
             TimeControl.SetPaused(false);
         }
@@ -95,29 +95,13 @@ namespace ParryEverything.Lab
                 TimeControl.SetPaused(true);
             }
 
-            UpdateAutoWalk();
+            if (catBody != null) catBody.TreadmillSpeed = treadmillSpeed > 0f ? treadmillSpeed : (float?)null;
 
             if (loop && lastMove >= 0 && boss != null && !boss.LabBusy && !boss.IsDead)
             {
                 boss.LabPlay(BossMoves[lastMove].move);
             }
             if (cam != null) cam.SetFocus(FocusPoint());
-        }
-
-        // Aller-retour autour du point de départ
-        private void UpdateAutoWalk()
-        {
-            if (controller == null || walkMode == 0)
-            {
-                GameInput.MoveOverride = null;
-                GameInput.SimulateHold(GameAction.Run, false);
-                return;
-            }
-            float x = controller.transform.position.x - playerHome.x;
-            if (x > walkRange) walkDir = -1f;
-            else if (x < -walkRange) walkDir = 1f;
-            GameInput.MoveOverride = walkDir;
-            GameInput.SimulateHold(GameAction.Run, walkMode == 2);
         }
 
         private Vector3 FocusPoint()
@@ -233,7 +217,12 @@ namespace ParryEverything.Lab
             GUILayout.EndHorizontal();
             GUI.enabled = true;
 
-            walkMode = GUILayout.Toolbar(walkMode, new[] { "Immobile", "Marche", "Course" });
+            // Allure sur place : le chat s'anime comme s'il avançait, sans bouger (marche ≈ 3,5 m/s, course du jeu : 6)
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"Allure {treadmillSpeed:0.0} m/s", GUILayout.Width(105f));
+            treadmillSpeed = GUILayout.HorizontalSlider(treadmillSpeed, 0f, maxTreadmillSpeed);
+            if (GUILayout.Button("0", GUILayout.Width(24f))) treadmillSpeed = 0f;
+            GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Saut")) GameInput.SimulatePress(GameAction.Jump);
@@ -249,7 +238,7 @@ namespace ParryEverything.Lab
             }
             if (GUILayout.Button("Replacer"))
             {
-                walkMode = 0;
+                treadmillSpeed = 0f;
                 if (GameFlow.Instance != null) GameFlow.Instance.PlacePlayer(playerHome);
                 else body.transform.position = playerHome;
             }
@@ -262,7 +251,7 @@ namespace ParryEverything.Lab
         private void SetForm(int form)
         {
             body.RemoveAllLimbs();
-            if (form >= 1) body.GrantFlesh(Limb.Flesh(testFleshLife));
+            if (form >= 1) body.GrantFlesh(Limb.Torso(testFleshLife));
             if (form >= 2) body.AttachLimbs(Limb.CatLegs(testLegLife));
             if (form == 3)
             {
@@ -291,16 +280,25 @@ namespace ParryEverything.Lab
             foreach (Limb limb in body.Limbs) has |= limb.Kind == kind && !limb.IsTorn;
             if (!GUILayout.Button((has ? "− " : "+ ") + label)) return;
 
-            // Recompose le corps : même chair et mêmes membres, avec ou sans cette pièce
+            // Recompose le corps : même torse et mêmes membres, avec ou sans cette pièce
+            var torso = new System.Collections.Generic.List<Limb>();
             var keep = new System.Collections.Generic.List<Limb>();
             foreach (Limb limb in body.Limbs)
             {
-                if (limb.Kind != kind && limb.Kind != LimbKind.Flesh && !limb.IsTorn) keep.Add(limb);
+                if (limb.IsTorn) continue;
+                if (limb.IsTorsoPart) torso.Add(limb);
+                else if (!SameGroup(limb.Kind, kind)) keep.Add(limb);
             }
-            Limb flesh = body.FleshLimb;
-            body.GrantFlesh(flesh);
+            body.GrantFlesh(torso.ToArray());
             body.AttachLimbs(keep);
             if (!has) body.AttachLimbs(make());
+        }
+
+        // Le bras va avec son avant-bras et sa main
+        private static bool SameGroup(LimbKind a, LimbKind group)
+        {
+            if (group == LimbKind.Arm) return a == LimbKind.Arm || a == LimbKind.Forearm || a == LimbKind.Hand;
+            return a == group;
         }
 
         // Vie et effet de chaque membre, pour voir son apparence (fourrure → chair cousue → à vif)
@@ -308,18 +306,28 @@ namespace ParryEverything.Lab
         {
             if (body.Limbs.Count == 0) return;
             GUILayout.Space(4f);
-            GUILayout.Label("Membres : vie et effet");
+            GUILayout.Label("Membres : vie et effet (✕ : arracher)");
+            Limb toTear = null;
             foreach (Limb limb in body.Limbs)
             {
                 if (limb.IsTorn) continue;
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(limb.Id, GUILayout.Width(95f));
                 float ratio = GUILayout.HorizontalSlider(limb.LifeRatio, 0.02f, 1f);
+                if (GUILayout.Button("✕", GUILayout.Width(24f))) toTear = limb;
                 GUILayout.EndHorizontal();
                 if (!Mathf.Approximately(ratio, limb.LifeRatio)) SetLife(limb, ratio);
 
                 int effect = GUILayout.Toolbar((int)limb.Effect, EffectLabels);
                 if (effect != (int)limb.Effect) limb.Effect = (LimbEffect)effect;
+            }
+
+            // Arraché après la boucle (il emporte ce qui y est cousu : la liste change)
+            if (toTear != null)
+            {
+                body.Invulnerable = false;
+                body.TearLimb(toTear);
+                body.Invulnerable = true;
             }
         }
 

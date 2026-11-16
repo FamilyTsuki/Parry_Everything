@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: CatModelSettings
   m_EditorClassIdentifier: ParryEverything.Editor::ParryEverything.Editor.CatModelSettings
   autoRebuild: 1
+  source: 1
+  blenderModel: {fileID: 919132149155446097, guid: efeada3e681b0a578a4fd3482a54a4a3, type: 3}
+  style: 3
   bodyRadii: {x: 0.26, y: 0.58, z: 0.25}
   torsoWidth:
     serializedVersion: 2
@@ -128,7 +131,7 @@ MonoBehaviour:
   bodyTaper: 0
   bodyFlank: 0.75
   bodyBend: 0
-  bodyDetail: 4
+  bodyDetail: 2
   bodyOffset: {x: 0, y: -0.03, z: 0}
   bodyRotation: {x: 0, y: 0, z: 0}
   bodyScale: {x: 1, y: 1, z: 1}
@@ -156,25 +159,38 @@ MonoBehaviour:
   furAccent: {r: 0.95, g: 0.42, b: 0.08, a: 1}
   furPatchScale: 4
   chestAmount: 0.75
+  collarLength: 0
+  collarTufts: 7
+  collarHeight: 0.66
+  collarSpread: 120
   neckPoint: {x: 0.08, y: 0.45, z: 0}
   shoulderPoint: {x: 0.08, y: 0.24, z: -0.27}
   tailPoint: {x: -0.22, y: -0.32, z: 0}
   hipPoint: {x: -0.06, y: -0.4, z: -0.15}
-  headRadii: {x: 0.28, y: 0.25, z: 0.25}
+  headRadii: {x: 0.24, y: 0.22, z: 0.22}
+  headDetail: 2
   headOffset: {x: 0.07, y: 0.2, z: 0}
   headRotation: {x: 0, y: 0, z: 0}
-  muzzleLength: 0.08
-  earLength: 0.4
-  earWidth: 0.11
+  muzzleLength: 0.05
+  earLength: 0.27
+  earWidth: 0.13
+  earInner: 0.7
+  earTuft: 0
   earPosition: {x: -0.04, y: 0.17, z: 0.12}
   earSpread: 14
   earBack: 18
-  cheekTuft: 0.09
+  cheekTuft: 0
+  cheekTuftCount: 5
+  foreheadTuft: 0
   eyeSize: 0.06
+  eyeTilt: 12
   eyePosition: {x: 0.19, y: 0.04, z: -0.15}
   eyeColor: {r: 1, g: 0.78, b: 0.12, a: 1}
-  armLength: 0.62
-  armThickness: 0.065
+  armLength: 0.68
+  armThickness: 0.048
+  fingerCount: 4
+  elbowTuft: 0
+  wristTuft: 0
   clawLength: 0.05
   clawColor: {r: 0.85, g: 0.83, b: 0.78, a: 1}
   upperArmWidth:
@@ -309,15 +325,64 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  tailLength: 1
+  tailLength: 1.1
   tailSegments: 7
-  tailBaseRadius: 0.07
-  tailTipRadius: 0.05
-  flameSize: 0.2
-  flameColor: {r: 1, g: 0.42, b: 0.05, a: 1}
-  flameCoreColor: {r: 1, g: 0.85, b: 0.3, a: 1}
-  legLength: 2
-  legThickness: 1.7
+  tailRadius: 0.16
+  tailWidth:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0.35
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.18
+      value: 0.75
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.5
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.82
+      value: 0.75
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0.15
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  tailTufts: 0
+  tailTuftLength: 0
+  legLength: 2.7
+  legThickness: 2
   legColor: {r: 0.1, g: 0.1, b: 0.17, a: 1}
   thighDepth: 0.62
   thighDome: 0.28

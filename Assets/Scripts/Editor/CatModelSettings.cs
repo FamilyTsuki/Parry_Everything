@@ -16,9 +16,37 @@ namespace ParryEverything.Editor
     // démarche) se règle sur le composant CatBody de l'objet « player ».
     public class CatModelSettings : ScriptableObject
     {
+        // Rendu du corps : un shader par style, tous avec la même chair et le même état des membres (FleshCore.cginc)
+        public enum Style
+        {
+            Smooth,   // FleshLit : rendu réaliste lisse
+            Fur,      // FleshFur : poils en couches (shell fur)
+            Toon,     // FleshToon : aplats, liseré, contour
+            Facets,   // FleshFacet : low-poly facetté
+        }
+
         [Header("Reconstruction")]
         [Tooltip("Reconstruit à chaque modification. Décocher pour enchaîner plusieurs changements, puis « Reconstruire ».")]
         public bool autoRebuild = true;
+
+        // D'où viennent les formes : générées d'après les réglages ci-dessous, ou modelées dans Blender
+        public enum Source
+        {
+            Generated,   // CatModelBuilder construit tout d'après les réglages
+            Blender,     // formes prises dans « blenderModel » (CatBlenderImport) ; chair, fourrure, yeux ajoutés par Unity
+        }
+
+        [Header("Source des formes")]
+        [Tooltip("Generated : formes calculées d'après les réglages. Blender : formes du fichier « blenderModel ».\n" +
+                 "Aller-retour : menu Parry Everything > Exporter le chat vers Blender, puis enregistrer en .blend dans Assets/Models/Cat.")]
+        public Source source = Source.Generated;
+        [Tooltip("Fichier Blender (.blend) du chat, importé par Unity. Objets attendus : Torso, Head, UpperArm, Forearm, Leg, " +
+                 "TailSeg0…N ; repères : Neck, Shoulder, TailBase, Hip, Elbow, Knee, Ankle (+ Eye, Nose facultatifs).")]
+        public GameObject blenderModel;
+
+        [Header("Style")]
+        [Tooltip("Rendu du corps (torse, membres) : lisse, fourrure douce, toon ou low-poly facetté.")]
+        public Style style = Style.Facets;
 
         [Header("Torse — silhouette")]
         [Tooltip("Demi-tailles en mètres : X largeur (avant-arrière), Y hauteur, Z épaisseur.")]
@@ -44,7 +72,7 @@ namespace ParryEverything.Editor
         [Tooltip("Courbure. > 0 : les deux bouts partent vers l'arrière (haricot). < 0 : vers l'avant.")]
         [Range(-0.3f, 0.3f)] public float bodyBend = 0f;
         [Tooltip("Finesse du maillage. 4 ≈ 2 500 sommets, 5 ≈ 10 000.")]
-        [Range(2, 5)] public int bodyDetail = 4;
+        [Range(2, 5)] public int bodyDetail = 2;
 
         [Header("Torse — placement dans le modèle")]
         [Tooltip("Décalage du corps (mètres) par rapport au centre du modèle.")]
@@ -95,12 +123,31 @@ namespace ParryEverything.Editor
         public Color furDark = new Color(0.07f, 0.08f, 0.19f);
         [Tooltip("Fourrure claire : poitrail, museau, joues, bout des pattes.")]
         public Color furLight = new Color(0.72f, 0.75f, 0.86f);
-        [Tooltip("Couleur vive du bout de la queue, sous la flamme.")]
+        [Tooltip("Couleur vive du bout de la queue.")]
         public Color furAccent = new Color(0.95f, 0.42f, 0.08f);
         [Tooltip("Taille des plaques de fourrure qui tombent (plus grand = plaques plus petites).")]
         [Range(1f, 12f)] public float furPatchScale = 4f;
         [Tooltip("Étendue du poitrail clair sur le devant du torse (0 : aucun).")]
         [Range(0f, 1f)] public float chestAmount = 0.55f;
+
+        [Header("Torse — découpe en 3 parties (gameplay)")]
+        // Chaque partie a sa vie et peut être arrachée seule (Limb : poitrine, ventre, bassin).
+        // Hauteurs dans le repère du torse (mètres, 0 = centre) ; coupe le long des triangles.
+        [Tooltip("Au-dessus : la poitrine (porte la tête et les bras).")]
+        public float chestSplit = 0.18f;
+        [Tooltip("En dessous : le bassin (porte les pattes et la queue). Entre les deux : le ventre, autour de l'âme.")]
+        public float pelvisSplit = -0.2f;
+
+        [Header("Torse — collerette")]
+        // Touffes de poils clairs autour du haut du torse, sous la tête, qui retombent vers l'avant et le bas
+        [Tooltip("Longueur des touffes de la collerette (0 : pas de collerette).")]
+        [Range(0f, 0.35f)] public float collarLength = 0.17f;
+        [Tooltip("Nombre de touffes par rang (2 rangs).")]
+        [Range(0, 20)] public int collarTufts = 12;
+        [Tooltip("Hauteur du premier rang sur le torse : 0 = milieu, 1 = sommet.")]
+        [Range(0f, 1f)] public float collarHeight = 0.66f;
+        [Tooltip("Étendue autour du torse depuis le devant (degrés de chaque côté ; 180 = tout le tour).")]
+        [Range(30f, 180f)] public float collarSpread = 120f;
 
         [Header("Torse — points d'attache (repère du torse)")]
         [Tooltip("Base du cou : la tête s'y accroche.")]
@@ -113,29 +160,66 @@ namespace ParryEverything.Editor
                  "L'autre hanche est symétrique.")]
         public Vector3 hipPoint = new Vector3(-0.06f, -0.4f, -0.15f);
 
+        [Header("Pose debout au repos (modèle généré, ou fichier Blender sans sol « Ground »)")]
+        // Avec un fichier Blender posé (objet Ground présent), la pose vient du fichier et ces valeurs sont ignorées
+        [Tooltip("Centre du torse par rapport au centre du joueur (pieds : 0,5 plus bas).")]
+        public Vector2 standingPosition = new Vector2(0f, 1.01f);
+        [Tooltip("Inclinaison du torse vers l'avant (degrés).")]
+        public float standingTilt = 22f;
+        [Tooltip("Écart des hanches en profondeur, en plus du point de hanche.")]
+        public float hipSpread = 0.08f;
+        [Tooltip("Pattes écartées vers l'extérieur (degrés).")]
+        public float legSplay = 10f;
+        [Tooltip("Cheville au-dessus du sol (mètres).")]
+        public float ankleHeight = 0.07f;
+        [Tooltip("Cheville devant la hanche (mètres).")]
+        public float footForward = 0f;
+        [Tooltip("Tête relevée par rapport au torse (degrés).")]
+        public float headAngle = 18.7f;
+        [Tooltip("Bras ramenés vers l'avant par rapport au torse (degrés ; = inclinaison du torse : bras pendants).")]
+        public float armAngle = 22f;
+        [Tooltip("Coude plié (degrés).")]
+        public float elbowAngle = 10f;
+        [Tooltip("La queue monte à sa naissance (degrés).")]
+        public float tailLift = 14f;
+        [Tooltip("Puis se recourbe à chaque segment (degrés).")]
+        public float tailCurl = 9f;
+
         [Header("Tête")]
         [Tooltip("Demi-tailles du crâne (X avant, Y haut, Z largeur).")]
-        public Vector3 headRadii = new Vector3(0.23f, 0.2f, 0.2f);
+        public Vector3 headRadii = new Vector3(0.24f, 0.22f, 0.22f);
+        [Tooltip("Finesse du maillage du crâne (1 : très facetté, 3 : lisse).")]
+        [Range(1, 4)] public int headDetail = 2;
         [Tooltip("Centre du crâne par rapport à la base du cou.")]
         public Vector3 headOffset = new Vector3(0.05f, 0.17f, 0f);
         [Tooltip("Rotation de toute la tête (degrés). Z : lève / baisse le museau.")]
         public Vector3 headRotation = Vector3.zero;
         [Tooltip("Avancée du museau.")]
-        [Range(0f, 0.25f)] public float muzzleLength = 0.08f;
+        [Range(0f, 0.25f)] public float muzzleLength = 0.05f;
         [Tooltip("Longueur des oreilles.")]
-        [Range(0f, 0.6f)] public float earLength = 0.3f;
-        [Tooltip("Rayon de la base des oreilles.")]
-        [Range(0.02f, 0.2f)] public float earWidth = 0.085f;
+        [Range(0f, 0.6f)] public float earLength = 0.27f;
+        [Tooltip("Largeur de la base des oreilles.")]
+        [Range(0.02f, 0.2f)] public float earWidth = 0.13f;
+        [Tooltip("Intérieur clair de l'oreille, en part de sa taille (0 : aucun).")]
+        [Range(0f, 0.9f)] public float earInner = 0.7f;
+        [Tooltip("Touffes de poils clairs qui sortent de l'oreille (0 : aucune).")]
+        [Range(0f, 0.15f)] public float earTuft = 0.06f;
         [Tooltip("Place des oreilles sur le crâne (X avant, Y haut, Z écart).")]
         public Vector3 earPosition = new Vector3(-0.03f, 0.14f, 0.1f);
         [Tooltip("Écartement des oreilles vers l'extérieur (degrés).")]
         [Range(-30f, 60f)] public float earSpread = 14f;
         [Tooltip("Inclinaison des oreilles vers l'arrière (degrés).")]
         [Range(-30f, 60f)] public float earBack = 18f;
-        [Tooltip("Touffes de poils sur les joues (0 : aucune).")]
-        [Range(0f, 0.15f)] public float cheekTuft = 0.07f;
-        [Tooltip("Taille des yeux.")]
-        [Range(0.01f, 0.12f)] public float eyeSize = 0.05f;
+        [Tooltip("Longueur des touffes de la collerette des joues (0 : aucune).")]
+        [Range(0f, 0.25f)] public float cheekTuft = 0.13f;
+        [Tooltip("Nombre de touffes de chaque côté de la tête.")]
+        [Range(0, 14)] public int cheekTuftCount = 7;
+        [Tooltip("Mèches sur le front, entre les oreilles (0 : aucune).")]
+        [Range(0f, 0.15f)] public float foreheadTuft = 0.06f;
+        [Tooltip("Taille des yeux (en amande).")]
+        [Range(0.01f, 0.12f)] public float eyeSize = 0.06f;
+        [Tooltip("Inclinaison des yeux (degrés) : > 0, le coin arrière remonte.")]
+        [Range(-30f, 30f)] public float eyeTilt = 12f;
         [Tooltip("Place de l'œil côté caméra par rapport au centre du crâne (l'autre œil : z opposé).")]
         public Vector3 eyePosition = new Vector3(0.15f, 0.03f, -0.12f);
         [Tooltip("Couleur des yeux (lumineux).")]
@@ -143,9 +227,15 @@ namespace ParryEverything.Editor
 
         [Header("Bras")]
         [Tooltip("Longueur épaule → poignet.")]
-        [Range(0.2f, 1.2f)] public float armLength = 0.55f;
+        [Range(0.2f, 1.2f)] public float armLength = 0.68f;
         [Tooltip("Épaisseur du bras.")]
-        [Range(0.02f, 0.15f)] public float armThickness = 0.055f;
+        [Range(0.02f, 0.15f)] public float armThickness = 0.048f;
+        [Tooltip("Nombre de doigts de la main.")]
+        [Range(0, 5)] public int fingerCount = 4;
+        [Tooltip("Touffe de poils derrière le coude (0 : aucune).")]
+        [Range(0f, 0.15f)] public float elbowTuft = 0.07f;
+        [Tooltip("Manchette de poils au poignet (0 : aucune).")]
+        [Range(0f, 0.12f)] public float wristTuft = 0.05f;
         [Tooltip("Longueur des griffes.")]
         [Range(0f, 0.15f)] public float clawLength = 0.05f;
         [Tooltip("Couleur des griffes.")]
@@ -169,19 +259,19 @@ namespace ParryEverything.Editor
 
         [Header("Queue")]
         [Tooltip("Longueur totale.")]
-        [Range(0.2f, 2.5f)] public float tailLength = 1f;
+        [Range(0.2f, 2.5f)] public float tailLength = 1.1f;
         [Tooltip("Nombre de segments (plus = ondulation plus souple).")]
         [Range(3, 12)] public int tailSegments = 7;
-        [Tooltip("Épaisseur à la base.")]
-        [Range(0.02f, 0.2f)] public float tailBaseRadius = 0.07f;
-        [Tooltip("Épaisseur au bout.")]
-        [Range(0.01f, 0.2f)] public float tailTipRadius = 0.05f;
-        [Tooltip("Taille de la flamme au bout (0 : pas de flamme).")]
-        [Range(0f, 0.5f)] public float flameSize = 0.2f;
-        [Tooltip("Couleur extérieure de la flamme.")]
-        public Color flameColor = new Color(1f, 0.42f, 0.05f);
-        [Tooltip("Cœur de la flamme.")]
-        public Color flameCoreColor = new Color(1f, 0.85f, 0.3f);
+        [Tooltip("Épaisseur maximale (rayon) de la queue touffue.")]
+        [Range(0.03f, 0.35f)] public float tailRadius = 0.16f;
+        [Tooltip("Épaisseur le long de la queue : horizontal 0 = naissance, 1 = bout ; vertical : part de « tailRadius ».")]
+        public AnimationCurve tailWidth = new AnimationCurve(
+            new Keyframe(0f, 0.35f), new Keyframe(0.18f, 0.75f), new Keyframe(0.5f, 1f),
+            new Keyframe(0.82f, 0.75f), new Keyframe(1f, 0.15f));
+        [Tooltip("Touffes de poils autour de chaque segment (0 : queue lisse).")]
+        [Range(0, 12)] public int tailTufts = 6;
+        [Tooltip("Longueur des touffes, là où la queue est la plus épaisse.")]
+        [Range(0f, 0.3f)] public float tailTuftLength = 0.13f;
 
         [Header("Pattes")]
         [Tooltip("Longueur de la patte (1 = première version, jugée trop petite). CatBody suit automatiquement.")]

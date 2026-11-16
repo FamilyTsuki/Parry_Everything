@@ -8,10 +8,15 @@ namespace ParryEverything.Player
     // Santé du joueur, sans barre de vie : l'état se lit sur le personnage.
     // Âme : chaque coup la consume (elle rétrécit), elle se régénère après un moment sans coup. Consumée = mort.
     // Corps : la chair du Gardien enferme l'âme (boule qui roule), puis des pattes y sont cousues (debout).
-    // Chaque membre a sa vie ; tant que la chair tient, les coups frappent le membre le plus proche, pas l'âme.
-    // Pattes perdues : retour à la boule. Chair éclatée : tous les membres cousus tombent avec, retour à l'âme (vie pleine).
+    // Le torse a 3 parties (ventre autour de l'âme, poitrine, bassin), chaque patte aussi (cuisse, jarret, pied).
+    // Chaque membre a sa vie et est cousu sur un autre (Limb.ParentId) ; tant que le ventre tient,
+    // les coups frappent le membre le plus proche, pas l'âme.
+    // Un membre arraché emporte tout ce qui y est cousu (poitrine → tête et bras ; bassin → pattes et queue ;
+    // cuisse → jarret et pied ; jarret → pied). Ventre éclaté : tout tombe, retour à l'âme (vie pleine).
+    // Une patte porte le chat tant que sa cuisse et son jarret tiennent ; sans pied, il boite.
+    // Plus aucune patte : retour à la boule.
     // Bras, tête et queue n'ont pas encore de capacité (GAME_DESIGN 6.3, ⚠️) : ils sont visuels pour l'instant.
-    // Un membre arraché tombe au sol (LimbPickup) ; ramassé, il peut être recousu (la chair d'abord).
+    // Un membre arraché tombe au sol (LimbPickup) ; ramassé, il peut être recousu une fois que ce qui le porte tient.
     public class PlayerBody : MonoBehaviour
     {
         [Header("Âme")]
@@ -50,7 +55,10 @@ namespace ParryEverything.Player
         public PlayerForm Form => !HasBody ? PlayerForm.Soul : IntactLegCount > 0 ? PlayerForm.Biped : PlayerForm.Ball;
         // Chair intacte (null si éclatée ou absente)
         public Limb FleshLimb => limbs.Find(l => l.Kind == LimbKind.Flesh && !l.IsTorn);
-        public int IntactLegCount => Count(l => l.Kind == LimbKind.Leg && !l.IsTorn);
+        // Pattes qui portent le chat : cuisse et jarret en place
+        public int IntactLegCount => Count(IsStandingLeg);
+        // Pattes qui portent le chat mais sans pied : il boite
+        public int MissingFootCount => Count(l => IsStandingLeg(l) && !HasIntactChild(FindChild(l, LimbKind.Shin), LimbKind.Foot));
         public int IntactLimbCount => Count(l => !l.IsTorn);
         // Membres ramassés, prêts à être recousus
         public int PocketCount => Count(l => l.IsPocketed);
@@ -127,10 +135,10 @@ namespace ParryEverything.Player
             OnLimbLost?.Invoke(limb);
             if (limb.Kind == LimbKind.Flesh)
             {
-                // La chair éclate : tout ce qui est cousu dessus tombe avec elle
+                // Le ventre éclate : tout ce qui est cousu sur le corps tombe avec lui
                 foreach (Limb sewn in limbs)
                 {
-                    if (sewn.Kind == LimbKind.Flesh || sewn.IsTorn) continue;
+                    if (sewn == limb || sewn.IsTorn) continue;
                     sewn.Damage(sewn.Life);
                     OnLimbLost?.Invoke(sewn);
                 }
@@ -138,7 +146,23 @@ namespace ParryEverything.Player
                 soul = soulMax;
                 lastHitTime = -100f;
             }
+            else
+            {
+                DropSewnOn(limb);
+            }
             NotifyForm();
+        }
+
+        // Ce qui est cousu sur ce membre tombe avec lui (et ce qui est cousu dessus, etc.)
+        private void DropSewnOn(Limb parent)
+        {
+            foreach (Limb sewn in limbs)
+            {
+                if (sewn.IsTorn || sewn.ParentId != parent.Id) continue;
+                sewn.Damage(sewn.Life);
+                OnLimbLost?.Invoke(sewn);
+                DropSewnOn(sewn);
+            }
         }
 
         // Mort immédiate, corps ou pas (chute dans le vide)
@@ -163,11 +187,33 @@ namespace ParryEverything.Player
             if (limb != null && limbs.Contains(limb)) limb.PickUp();
         }
 
-        // Peut-on recoudre ce membre maintenant ? (tout se coud sur la chair : il faut la chair d'abord)
+        // Peut-on recoudre ce membre maintenant ? Il faut que ce qui le porte tienne (le ventre d'abord, puis
+        // la poitrine et le bassin, puis ce qui y est cousu...)
         public bool CanSew(Limb limb)
         {
             if (limb == null || !limb.IsPocketed || !limbs.Contains(limb)) return false;
-            return limb.Kind == LimbKind.Flesh || HasBody;
+            return CanHold(limb);
+        }
+
+        // Le corps peut porter ce membre : le ventre tient tout seul ; les autres ont besoin de leur porteur intact
+        // (sans porteur indiqué, ancien membre : le ventre suffit)
+        public bool CanHold(Limb limb)
+        {
+            if (limb.Kind == LimbKind.Flesh) return true;
+            if (string.IsNullOrEmpty(limb.ParentId)) return HasBody;
+            Limb parent = FindById(limb.ParentId);
+            return parent != null && parent != limb && !parent.IsTorn;
+        }
+
+        // Membre sur lequel celui-ci est cousu (null : le ventre lui-même, ou porteur absent)
+        public Limb ParentOf(Limb limb)
+        {
+            return limb == null || string.IsNullOrEmpty(limb.ParentId) ? null : FindById(limb.ParentId);
+        }
+
+        private Limb FindById(string id)
+        {
+            return limbs.Find(l => l.Id == id);
         }
 
         // Recoud un membre ramassé. Renvoie true s'il a été recousu.
@@ -180,7 +226,7 @@ namespace ParryEverything.Player
             return true;
         }
 
-        // Recoud le prochain membre en poche (la chair avant les pattes). Renvoie true si un membre a été recousu.
+        // Recoud le prochain membre en poche (le ventre d'abord, puis ce qui peut tenir). Renvoie true si un membre a été recousu.
         public bool SewNext()
         {
             Limb next = limbs.Find(l => l.Kind == LimbKind.Flesh && CanSew(l)) ?? limbs.Find(CanSew);
@@ -199,22 +245,23 @@ namespace ParryEverything.Player
         }
 
         // La chair d'un boss s'agglutine autour de l'âme : remplace tout le corps actuel par cette chair
-        public void GrantFlesh(Limb flesh)
+        // (le torse entier : Limb.Torso ; ou le ventre seul : Limb.Flesh)
+        public void GrantFlesh(params Limb[] torso)
         {
             limbs.Clear();
-            if (flesh != null) limbs.Add(flesh);
+            AttachLimbs(torso);
             NotifyForm();
         }
 
-        // Coud de nouveaux membres sur la chair (pattes, bras, tête, queue). Sans chair, rien ne tient.
+        // Coud de nouveaux membres sur le corps. Chacun ne tient que si ce qui le porte tient
+        // (dans la liste, les porteurs passent avant : Limb.CatLegs donne cuisse, jarret, pied dans cet ordre).
         public bool AttachLimbs(IEnumerable<Limb> newLimbs)
         {
             if (newLimbs == null) return false;
             bool any = false;
             foreach (Limb limb in newLimbs)
             {
-                if (limb == null || limbs.Contains(limb)) continue;
-                if (limb.Kind != LimbKind.Flesh && !HasBody) continue;
+                if (limb == null || limbs.Contains(limb) || !CanHold(limb)) continue;
                 limbs.Add(limb);
                 any = true;
             }
@@ -279,6 +326,23 @@ namespace ParryEverything.Player
             if (form == lastForm) return;
             lastForm = form;
             OnFormChanged?.Invoke(form);
+        }
+
+        // Patte qui porte le chat : cuisse en place, avec son jarret en place
+        private bool IsStandingLeg(Limb limb)
+        {
+            return limb.Kind == LimbKind.Leg && !limb.IsTorn && CanHold(limb) && HasIntactChild(limb, LimbKind.Shin);
+        }
+
+        private Limb FindChild(Limb parent, LimbKind kind)
+        {
+            return parent == null ? null : limbs.Find(l => l.Kind == kind && l.ParentId == parent.Id);
+        }
+
+        private bool HasIntactChild(Limb parent, LimbKind kind)
+        {
+            Limb child = FindChild(parent, kind);
+            return child != null && !child.IsTorn;
         }
 
         private int Count(Predicate<Limb> match)

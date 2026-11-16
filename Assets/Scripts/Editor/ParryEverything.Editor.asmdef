@@ -2,7 +2,8 @@
     "name": "ParryEverything.Editor",
     "rootNamespace": "ParryEverything",
     "references": [
-        "ParryEverything"
+        "ParryEverything",
+        "Unity.Formats.Fbx.Editor"
     ],
     "includePlatforms": [
         "Editor"

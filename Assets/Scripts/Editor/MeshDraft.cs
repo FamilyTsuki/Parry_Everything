@@ -17,6 +17,20 @@ namespace ParryEverything.Editor
             for (int i = 0; i < submeshCount; i++) submeshes.Add(new List<int>());
         }
 
+        // Nombre de sommets déjà ajoutés : repère le début d'une forme (couleur de fourrure propre à cette forme)
+        public int VertexCount => vertices.Count;
+
+        // Low-poly : moins de côtés aux tubes et touffes, ellipsoïdes moins subdivisés (facettes bien visibles)
+        public bool LowPoly { get; set; }
+
+        private int Sides(int segments)
+        {
+            if (!LowPoly) return segments;
+            if (segments <= 5) return 3;
+            if (segments <= 7) return 4;
+            return Mathf.Max(5, Mathf.RoundToInt(segments * 0.55f));
+        }
+
         // Sphère subdivisée, chaque sommet placé par 'shape' (direction unitaire → position) et coloré par 'paint'
         public void AddSphere(int subdivisions, Func<Vector3, Vector3> shape, Func<Vector3, Color> paint, int submesh = 0)
         {
@@ -37,6 +51,7 @@ namespace ParryEverything.Editor
         // Ellipsoïde simple, d'une seule couleur
         public void AddEllipsoid(Vector3 center, Vector3 radii, Color color, int subdivisions = 2, int submesh = 0)
         {
+            if (LowPoly) subdivisions = Mathf.Max(1, subdivisions - 1);
             AddSphere(subdivisions, d => center + Vector3.Scale(d, radii), _ => color, submesh);
         }
 
@@ -47,6 +62,7 @@ namespace ParryEverything.Editor
         {
             int n = points.Count;
             int start = vertices.Count;
+            segments = Sides(segments);
             for (int i = 0; i < n; i++)
             {
                 Vector3 prev = points[Mathf.Max(0, i - 1)];
@@ -133,6 +149,18 @@ namespace ParryEverything.Editor
         {
             AddLoft(new[] { baseCenter, Vector3.Lerp(baseCenter, tip, 0.5f), tip },
                     new[] { radius, radius * 0.6f, 0.002f }, segments, (_, __) => color, submesh);
+        }
+
+        // Touffe de poils : pointe effilée et aplatie, qui se recourbe vers 'bend' (décalage de la pointe).
+        // flatten : épaisseur en profondeur par rapport à la largeur (1 = ronde, plus petit = lame plate).
+        public void AddTuft(Vector3 root, Vector3 direction, float length, float radius, Vector3 bend, Color color,
+                            float flatten = 0.6f, int segments = 5, int submesh = 0)
+        {
+            Vector3 dir = direction.normalized * length;
+            var points = new[] { root, root + dir * 0.35f + bend * 0.1f, root + dir * 0.7f + bend * 0.4f, root + dir + bend };
+            var radii = new[] { radius, radius * 0.8f, radius * 0.45f, 0.002f };
+            var depth = new[] { flatten, flatten, flatten, flatten };
+            AddLoft(points, radii, segments, (_, __) => color, submesh, depth);
         }
 
         public Mesh ToMesh(string name)

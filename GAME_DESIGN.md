@@ -167,13 +167,20 @@ Questions ouvertes :
 
 Capacités citées : saut sur les murs, courir, parer plus vite.
 
-**Validé — la forme finale : un chat debout.** À la fin de l'évolution, le chat se tient et se déplace **sur 2 pattes**, comme un guerrier-chat. Référence : [References/chat_forme_finale.png](References/chat_forme_finale.png). On y voit un corps sombre bleu nuit, des yeux jaunes, le poitrail clair, une queue au bout de flamme orange, une silhouette fine et nerveuse, et une lame tenue en main.
+**Validé — la forme finale : un chat debout.** À la fin de l'évolution, le chat se tient et se déplace **sur 2 pattes**, comme un guerrier-chat. Référence : [References/chat_forme_finale.png](References/chat_forme_finale.png). On y voit un corps sombre bleu nuit, des yeux jaunes, le poitrail clair, une silhouette fine et nerveuse, et une lame tenue en main. **Mise à jour (2026-11-15)** : formes de la tête, des bras et de la queue d'après [References/chat_fourrure.png](References/chat_fourrure.png) (couleurs inchangées) : grandes oreilles à l'intérieur clair, collerette de poils aux joues et au poitrail, bras fins à mains griffues, **grosse queue touffue sans flamme**.
 - *(proposition)* Le chat commence à 4 pattes (étape Pattes), puis **se redresse** à une étape plus tardive : les pattes avant deviennent des bras. Ça explique la perte d'un bras ou d'une jambe dans le premier jet.
 - ⚠️ À définir : à quelle étape il se redresse (la Queue, pour l'équilibre ?), et à quoi sert la lame (outil de parade ? pas d'attaque avant le choix final).
 
 ### 6.4 Perte de membres (côté gore)
 
 **Validé — le corps sert de barre de vie.** Pas de barre de vie classique : **chaque membre a sa propre vie**. Un coup abîme un membre, sans forcément l'arracher ; le membre n'est arraché que quand sa vie tombe à zéro, et la capacité liée est perdue avec lui. Quand tout le corps est perdu, on redevient une âme.
+
+**Validé (2026-11-15) — le torse et les pattes en 3 parties.** Le torse : **ventre** (autour de l'âme), **poitrine** (porte la tête et les bras), **bassin** (porte les pattes et la queue). Chaque patte : **cuisse**, **jarret**, **pied**. Chaque partie a sa vie (torse 80 = 25 / 30 / 25 ; patte 40 = 18 / 14 / 8). Une partie arrachée **emporte ce qui y est cousu** : poitrine → tête et bras ; bassin → pattes et queue ; cuisse → toute la patte ; jarret → jarret et pied ; ventre éclaté → tout tombe, retour à l'âme. Sans pied, le chat **boite** sur son moignon ; une patte ne le porte plus sans son jarret. On ne recoud une partie qu'une fois ce qui la porte en place.
+
+**Validé (2026-11-16) — les bras aussi en 3 parties.** Chaque bras : **haut du bras**, **avant-bras**, **main** (bras 30 = 14 / 10 / 6). Même règle : haut du bras → tout le bras ; avant-bras → avant-bras et main. Le HUD du corps les montre séparément.
+**Validé (2026-11-16) — sans pattes mais avec la tête, il rampe** (sans tête : il roule, boule). Avec bras : couché sur le ventre, il se tire avec les bras ; sans bras : il ondule comme un ver.
+- ⚠️ **Vitesse en rampant** : plus lente que la boule (à régler ; pour l'instant seule l'animation change). **Saut en rampant** : petit bond (à faire).
+- ⚠️ **Ce que le chat perd sans main** (bras encore là) : à décider (rien de spécial, parade affaiblie, autre).
 
 **Validé — l'âme se consume.** En âme, chaque coup reçu consume une partie de l'âme, qui **rétrécit**. Elle se régénère peu à peu avec le temps. Quand l'âme est entièrement consumée, le chat meurt.
 
@@ -373,7 +380,7 @@ Bonnes bases, mais pas encore satisfaisantes : à retravailler.
 - **Sauvegarde :** un fichier JSON dans `Application.persistentDataPath`. Contenu : sanctuaire actuel, boss vaincus, pattes possédées, compteurs de comportement. Écrite à chaque sanctuaire et à chaque boss vaincu.
 - **Comportement (enregistré, pas encore utilisé) :** ennemis épargnés, âmes absorbées, âmes errantes bousculées.
 - **Menus (OnGUI via `GuiDraw` pour l'instant) :** titre (Continuer, Nouvelle partie, Quitter) ; pause sur Échap (Reprendre, Menu titre) ; écran de fin de tranche.
-- **HUD :** aucune barre de vie. L'état se lit sur le corps du chat (pattes présentes et abîmées, taille de l'âme).
+- **HUD :** aucune barre de vie. L'état se lit sur le corps du chat (pattes présentes et abîmées, taille de l'âme). **Mise à jour (2026-11-15)** : petite silhouette du chat en haut à droite (`BodyHud`), découpée en membres : chaque membre se colore selon sa vie (clair → orange → rouge, clignote blanc quand il est touché), grisé s'il est arraché, pastille de couleur pour son effet (rouge hémorragie, vert infection, violet hypertrophie). Pas de chiffres ; rien en âme.
 
 #### Commandes (clavier)
 

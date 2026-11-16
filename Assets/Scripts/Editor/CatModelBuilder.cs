@@ -9,12 +9,15 @@ using Object = UnityEngine.Object;
 namespace ParryEverything.Editor
 {
     // Construit les modèles 3D du chat et les enregistre comme assets (Prefabs/Player) :
-    //  - FleshBall : le torse (chair du Gardien refermée sur l'âme), en œuf / capsule ;
+    //  - FleshBall : le torse (chair du Gardien refermée sur l'âme), en œuf / capsule, collerette de poils ;
     //  - CatLeg    : grande patte arrière digitigrade (cuisse, jarret, grand pied à doigts), articulée au genou
     //                et à la cheville (le pied reste à plat) ;
-    //  - CatArm    : bras (patte avant du chat redressé), articulé au coude, avec griffes ;
-    //  - CatHead   : tête (crâne, museau, oreilles, joues, yeux lumineux) ;
-    //  - CatTail   : queue en segments (pour onduler), flamme au bout.
+    //  - CatArm    : bras fin (patte avant du chat redressé), articulé au coude, touffes au coude et au poignet,
+    //                main à doigts griffus ;
+    //  - CatHead   : tête (crâne, museau court, grandes oreilles à l'intérieur clair, collerette des joues,
+    //                yeux lumineux en amande) ;
+    //  - CatTail   : grosse queue touffue en segments (pour onduler).
+    // La fourrure en relief est faite de touffes (pointes aplaties, MeshDraft.AddTuft).
     // CatBody assemble ces pièces selon les membres que le chat possède, et les anime.
     //
     // Chaque membre a deux couches, lues par le shader FleshLit :
@@ -27,7 +30,7 @@ namespace ParryEverything.Editor
     public static class CatModelBuilder
     {
         // ---------- Fichiers produits ----------
-        private const string SettingsPath = "Assets/Meshes/Player/CatModelSettings.asset";
+        internal const string SettingsPath = "Assets/Meshes/Player/CatModelSettings.asset";
         private const string MeshPath = "Assets/Meshes/Player/CatModels.asset";     // tous les meshes, en sous-assets
         private const string MaterialFolder = "Assets/Materials/Player";
         private const string PrefabFolder = "Assets/Prefabs/Player";
@@ -38,6 +41,7 @@ namespace ParryEverything.Editor
         private static readonly Vector3 AnkleAt1 = new Vector3(0f, -0.235f, 0f);     // genou → cheville
 
         private static readonly Color PupilColor = new Color(0.02f, 0.02f, 0.03f);
+        internal const int HipAnchorBone = 3;   // os du haut de la cuisse (prefab CatLeg : HipAnchor)
 
         // =====================================================================
         //  Menus
@@ -56,6 +60,47 @@ namespace ParryEverything.Editor
         {
             Build(LoadOrCreateSettings());
         }
+
+        // ---------- Pour l'aller-retour avec Blender (CatBlenderExport) ----------
+
+        internal static CatModelSettings Settings => LoadOrCreateSettings();
+
+        // Pièces fraîchement construites, non enregistrées, sommets partagés (pas de facettes séparées) :
+        // plus faciles à modifier dans Blender. Clé = nom du mesh (FleshBall, CatLegSkin, CatHead, ...).
+        internal static Dictionary<string, Mesh> BuildEditableMeshes(CatModelSettings s)
+        {
+            var list = new List<Mesh> { BuildTorso(s), BuildLegSkin(s), BuildHead(s, false), BuildUpperArm(s), BuildForearm(s) };
+            for (int i = 0; i < s.tailSegments; i++) list.Add(BuildTailSegment(s, i));
+            var result = new Dictionary<string, Mesh>();
+            foreach (Mesh mesh in list) result[mesh.name] = mesh;
+            return result;
+        }
+
+        // Articulations et points d'attache du modèle généré
+        internal static CatRig GeneratedRig(CatModelSettings s)
+        {
+            var rig = new CatRig
+            {
+                Neck = s.neckPoint,
+                Shoulder = s.shoulderPoint,
+                TailBase = s.tailPoint,
+                Hip = new Vector3(s.hipPoint.x, s.hipPoint.y, -(Mathf.Abs(s.hipPoint.z) + s.hipSpread)),
+                Knee = KneeRest(s),
+                AnkleFromKnee = AnkleAt1 * s.legLength,
+                Elbow = ElbowPoint(s),
+                Eye = DefaultEye(s),
+                Nose = DefaultNose(s),
+                TailSegments = s.tailSegments,
+                TailSegmentLength = s.tailLength / s.tailSegments,
+            };
+            rig.SetStraightTail();
+            rig.SetPoseFrom(s);
+            return rig;
+        }
+
+        internal static Vector3 LegKnee(CatModelSettings s) => KneeRest(s);      // repère de la hanche
+        internal static Vector3 LegAnkle(CatModelSettings s) => AnkleRest(s);    // repère de la hanche
+        internal static Vector3 ArmElbow(CatModelSettings s) => ElbowPoint(s);   // repère de l'épaule
 
         // Reconstruction différée (une seule par image même si plusieurs valeurs changent).
         // Pas de drapeau « déjà demandé » : si un autre outil plante dans le même delayCall, Unity jette
@@ -86,63 +131,100 @@ namespace ParryEverything.Editor
             Material flesh = SaveMaterial("Flesh", "Custom/FleshLit", m => m.SetFloat("_Glossiness", 0.45f));
             Material leg = SaveMaterial("CatLeg", "Custom/FleshLit", m => m.SetFloat("_Glossiness", 0.3f));
             Material glow = SaveMaterial("CatGlow", "Custom/GlowUnlit", null);
+            // Style : même matériau (réglages gardés), shader changé
+            ApplyStyle(s, flesh);
+            ApplyStyle(s, leg);
             Material claw = SaveMaterial("CatClaw", "Standard", m => m.SetFloat("_Glossiness", 0.6f));
             claw.color = s.clawColor;
             EditorUtility.SetDirty(claw);
 
-            var built = new List<Mesh>
+            // Pièces : modèle Blender si choisi (CatBlenderImport), sinon générées d'après les réglages
+            if (!CatBlenderImport.TryBuild(s, out List<Mesh> built, out CatRig rig))
             {
-                BuildTorso(s), BuildLegSkin(s), BuildHead(s), BuildUpperArm(s), BuildForearm(s), BuildFlame(s),
-            };
-            for (int i = 0; i < s.tailSegments; i++) built.Add(BuildTailSegment(s, i));
+                built = new List<Mesh>
+                {
+                    BuildTorso(s), BuildLegSkin(s), BuildHead(s), BuildUpperArm(s), BuildForearm(s),
+                };
+                for (int i = 0; i < s.tailSegments; i++) built.Add(BuildTailSegment(s, i));
+                rig = GeneratedRig(s);
+            }
+            // Gameplay : torse en poitrine / ventre / bassin, patte en cuisse / jarret / pied (une vie chacun)
+            SplitTorso(built, s);
+            SplitLeg(built);
+            // Modèle généré : la main reste dans l'avant-bras (main vide)
+            if (!built.Exists(x => x.name == "CatHand")) built.Add(EmptyMesh("CatHand", 2));
+            if (IsLowPoly(s))
+            {
+                foreach (Mesh mesh in built) FlattenFaces(mesh);
+            }
             Dictionary<string, Mesh> m = SaveMeshes(built);
 
-            // Torse : points d'attache de la tête, des bras et de la queue
+            // Torse : 3 parties (Chest, Belly, Pelvis), points d'attache de la tête, des bras et de la queue
             SavePrefab("FleshBall", go =>
             {
-                AddRenderer(go, m["FleshBall"], flesh);
-                go.AddComponent<CatTorsoRig>().SetPoints(s.neckPoint, s.shoulderPoint, s.tailPoint, s.hipPoint);
+                AddChild(go.transform, "Chest", Vector3.zero, m["FleshChest"], flesh);
+                AddChild(go.transform, "Belly", Vector3.zero, m["FleshBelly"], flesh);
+                AddChild(go.transform, "Pelvis", Vector3.zero, m["FleshPelvis"], flesh);
+                var torsoRig = go.AddComponent<CatTorsoRig>();
+                torsoRig.SetPoints(rig.Neck, rig.Shoulder, rig.TailBase, rig.Hip);
+                torsoRig.SetPose(rig.StandingPosition, rig.StandingTilt);
             });
 
             // CatLeg (hanche, os 0) → Knee (os 1, pivot du genou) → Ankle (os 2, pivot de la cheville, pied à plat)
-            //                      → Skin (la patte entière, un seul maillage déformé par les 3 os)
+            //                      → HipAnchor (os 3, haut de la cuisse : CatBody annule la rotation de la cuisse,
+            //                        la fesse reste collée au corps et le pli se fait à la hanche)
+            //                      → Thigh, Shin, Foot : les 3 parties de la patte, déformées par les mêmes os
+            //                        (elles restent jointes en se pliant ; chacune peut disparaître seule)
             SavePrefab("CatLeg", go =>
             {
-                go.AddComponent<CatLegRig>().SetGeometry(KneeRest(s), AnkleAt1 * s.legLength);
-                Transform kneeT = AddChild(go.transform, "Knee", KneeRest(s), null);
-                Transform ankleT = AddChild(kneeT, "Ankle", AnkleAt1 * s.legLength, null);
-                var skin = new GameObject("Skin").AddComponent<SkinnedMeshRenderer>();
-                skin.transform.SetParent(go.transform, false);
-                skin.sharedMesh = m["CatLegSkin"];
-                skin.sharedMaterial = leg;
-                skin.bones = new[] { go.transform, kneeT, ankleT };
-                skin.rootBone = go.transform;
-                skin.updateWhenOffscreen = true;   // bornes recalculées : la patte pliée n'est jamais coupée
+                var legRig = go.AddComponent<CatLegRig>();
+                legRig.SetGeometry(rig.Knee, rig.AnkleFromKnee);
+                legRig.SetStance(rig.LegSplay, rig.FootForward, rig.AnkleHeight);
+                Transform kneeT = AddChild(go.transform, "Knee", rig.Knee, null);
+                Transform ankleT = AddChild(kneeT, "Ankle", rig.AnkleFromKnee, null);
+                Transform anchorT = AddChild(go.transform, "HipAnchor", Vector3.zero, null);
+                foreach (string part in new[] { "Thigh", "Shin", "Foot" })
+                {
+                    var skin = new GameObject(part).AddComponent<SkinnedMeshRenderer>();
+                    skin.transform.SetParent(go.transform, false);
+                    skin.sharedMesh = m["CatLeg" + part];
+                    skin.sharedMaterial = leg;
+                    skin.bones = new[] { go.transform, kneeT, ankleT, anchorT };
+                    skin.rootBone = go.transform;
+                    skin.updateWhenOffscreen = true;   // bornes recalculées : la patte pliée n'est jamais coupée
+                }
             });
 
+            // Rotations des pièces (racine, coude, segments) = pose de repos ; CatBody y ajoute les mouvements
             // CatArm (épaule) → Upper (bras)
-            //                 → Elbow (pivot du coude) → Fore (avant-bras, main, griffes)
+            //                 → Elbow (pivot du coude) → Fore (avant-bras)
+            //                                          → Hand (main, griffes) : membres à part (PartOf)
             SavePrefab("CatArm", go =>
             {
+                go.transform.localRotation = rig.ArmRest;
                 AddChild(go.transform, "Upper", Vector3.zero, m["CatUpperArm"], flesh);
-                Transform elbow = AddChild(go.transform, "Elbow", ElbowPoint(s), null);
+                Transform elbow = AddChild(go.transform, "Elbow", rig.Elbow, null);
+                elbow.localRotation = rig.ElbowRest;
                 AddChild(elbow, "Fore", Vector3.zero, m["CatForearm"], flesh, claw);
+                AddChild(elbow, "Hand", Vector3.zero, m["CatHand"], flesh, claw);
             });
 
             // CatHead (base du cou, pivot de la tête) : crâne + yeux
-            SavePrefab("CatHead", go => AddRenderer(go, m["CatHead"], flesh, glow));
+            SavePrefab("CatHead", go =>
+            {
+                go.transform.localRotation = rig.HeadRest;
+                AddRenderer(go, m["CatHead"], flesh, glow);
+            });
 
-            // CatTail (naissance) → Seg0 → Seg1 → ... → SegN (chaque segment est un pivot) → Flame
+            // CatTail (naissance) → Seg0 → Seg1 → ... → SegN (chaque segment est un pivot)
             SavePrefab("CatTail", go =>
             {
                 Transform parent = go.transform;
-                float segLength = s.tailLength / s.tailSegments;
-                for (int i = 0; i < s.tailSegments; i++)
+                for (int i = 0; i < rig.TailSegments; i++)
                 {
-                    Vector3 at = i == 0 ? Vector3.zero : new Vector3(-segLength, 0f, 0f);
-                    parent = AddChild(parent, "Seg" + i, at, m["CatTailSeg" + i], flesh);
+                    parent = AddChild(parent, "Seg" + i, i == 0 ? Vector3.zero : rig.TailPositions[i], m["CatTailSeg" + i], flesh);
+                    parent.localRotation = rig.TailRotations[i];
                 }
-                AddChild(parent, "Flame", new Vector3(-segLength, 0f, 0f), m["CatTailFlame"], glow);
             });
 
             AssetDatabase.SaveAssets();
@@ -158,21 +240,53 @@ namespace ParryEverything.Editor
         {
             var skin = new FleshSkin(s, s.seed, s.patchCount, s.lumpCount, s.lumpiness);
             Matrix4x4 placement = Matrix4x4.TRS(s.bodyOffset, Quaternion.Euler(s.bodyRotation), s.bodyScale);
-            var d = new MeshDraft();
+            var d = NewDraft(s);
             d.AddSphere(s.bodyDetail, dir => placement.MultiplyPoint3x4(EggPoint(s, dir) * skin.Displace(dir)), skin.Paint);
+            var marks = new FurMarks();
+            AddCollar(s, d, marks, placement, skin);
             Mesh mesh = d.ToMesh("FleshBall");
 
-            // Fourrure : bleu nuit, poitrail clair sur le devant
+            // Fourrure : bleu nuit, poitrail clair sur le devant, collerette claire
             Matrix4x4 toEgg = placement.inverse;
-            ApplyFur(s, mesh, 1f, p =>
+            Vector3[] v = mesh.vertices;
+            ApplyFurByIndex(s, mesh, 1f, i => marks.Get(i, () =>
             {
-                Vector3 e = toEgg.MultiplyPoint3x4(p);
+                Vector3 e = toEgg.MultiplyPoint3x4(v[i]);
                 Vector3 dir = new Vector3(e.x / s.bodyRadii.x, e.y / s.bodyRadii.y, e.z / s.bodyRadii.z);
                 float front = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.85f - s.chestAmount, 1.05f - s.chestAmount * 0.6f, dir.x));
                 float band = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.45f, 0.85f, Mathf.Abs(dir.y - 0.05f)));
                 return Color.Lerp(s.furDark, s.furLight, front * band * (s.chestAmount > 0f ? 1f : 0f));
-            });
+            }));
             return mesh;
+        }
+
+        // Collerette : deux rangs de touffes claires autour du haut du torse (devant et côtés),
+        // qui retombent vers le bas et l'extérieur. Le 2e rang, plus bas, est décalé et plus long.
+        private static void AddCollar(CatModelSettings s, MeshDraft d, FurMarks marks, Matrix4x4 placement, FleshSkin skin)
+        {
+            if (s.collarLength <= 0f || s.collarTufts <= 0) return;
+            int from = d.VertexCount;
+            for (int row = 0; row < 2; row++)
+            {
+                float h = s.collarHeight - row * 0.17f;          // hauteur sur la sphère unité (−1 bas, 1 haut)
+                float ring = Mathf.Sqrt(Mathf.Max(0f, 1f - h * h));
+                int count = s.collarTufts + row;
+                for (int k = 0; k < count; k++)
+                {
+                    float u = count == 1 ? 0.5f : (k + row * 0.5f) / (count - 1f + row);
+                    float phi = Mathf.Lerp(-s.collarSpread, s.collarSpread, u) * Mathf.Deg2Rad;   // 0 = devant (+X)
+                    var dir = new Vector3(Mathf.Cos(phi) * ring, h, Mathf.Sin(phi) * ring);
+                    Vector3 root = placement.MultiplyPoint3x4(EggPoint(s, dir) * 0.97f);
+                    var outward = new Vector3(Mathf.Cos(phi), 0f, Mathf.Sin(phi));
+                    float jitter = 0.8f + 0.4f * Hash01(k, row + 31);
+                    float length = s.collarLength * (row == 0 ? 0.85f : 1.1f) * jitter;
+                    // Mèches larges et plates qui retombent en se recourbant : de la fourrure, pas des éclats
+                    Vector3 tuftDir = outward * 0.6f + Vector3.down;
+                    d.AddTuft(root, tuftDir, length, length * 0.55f, outward * length * 0.35f + Vector3.down * length * 0.1f,
+                              skin.Paint(dir), 0.4f, 6);
+                }
+            }
+            marks.Add(from, d.VertexCount, s.furLight);
         }
 
         // Point de la surface du torse (sans bosses) dans la direction 'dir'
@@ -208,9 +322,9 @@ namespace ParryEverything.Editor
         // Rotule et talon sont des reliefs du tube (pas des boules collées).
         // Repère : hanche à l'origine, patte de profil (X = avant, Y = haut). Pose de repos = pose du modèle.
 
-        private const int LegRings = 56;          // anneaux le long de la patte (plus = plus lisse)
-        private const int LegSegments = 14;       // sommets autour de chaque anneau
-        private const float JointBlend = 0.045f;  // largeur du mélange de poids autour d'une articulation (part de la longueur)
+        private static int LegRings(CatModelSettings s) => IsLowPoly(s) ? 26 : 56;   // anneaux le long de la patte (plus = plus lisse)
+        private const int LegSegments = 14;       // sommets autour de chaque anneau (moins en low-poly : MeshDraft.LowPoly)
+        internal const float JointBlend = 0.045f;  // largeur du mélange de poids autour d'une articulation (part de la longueur)
 
         // Os de la patte au repos (repère de la hanche)
         private static Vector3 KneeRest(CatModelSettings s) => KneeAt1 * s.legLength;
@@ -223,7 +337,7 @@ namespace ParryEverything.Editor
             // Talon : à heelHeight entre le genou et la base des doigts, reculé de heelBack
             Vector3 heel = Vector3.Lerp(knee, ankle, s.heelHeight) + new Vector3(-s.heelBack * L, 0f, 0f);
             Vector3 P = s.pawSize;
-            float footY = -0.07f + P.y;   // centre du pied : la cheville est à 0.07 au-dessus du sol (CatBody.ankleHeight)
+            float footY = -0.07f + P.y;   // centre du pied : la cheville est à 0.07 au-dessus du sol (CatLegRig.AnkleHeight)
 
             // L'os : points de passage (lissés en courbe). Repère des marqueurs pour savoir où sont genou et cheville.
             var bone = new List<Vector3>
@@ -245,12 +359,13 @@ namespace ParryEverything.Editor
 
             float thighRadius = 0.072f * s.legThickness;
             float shinRadius = 0.047f * s.legThickness;
-            var points = new Vector3[LegRings];
-            var radii = new float[LegRings];
-            var depth = new float[LegRings];
-            for (int i = 0; i < LegRings; i++)
+            int legRings = LegRings(s);
+            var points = new Vector3[legRings];
+            var radii = new float[legRings];
+            var depth = new float[legRings];
+            for (int i = 0; i < legRings; i++)
             {
-                float t = i / (LegRings - 1f);
+                float t = i / (legRings - 1f);
                 Vector3 p = BonePoint(bone, t);
                 Vector3 tangent = (BonePoint(bone, Mathf.Min(1f, t + 0.005f)) - BonePoint(bone, Mathf.Max(0f, t - 0.005f))).normalized;
                 var front = new Vector3(-tangent.y, tangent.x, 0f);   // perpendiculaire « avant » dans le plan de profil
@@ -285,7 +400,7 @@ namespace ParryEverything.Editor
                 depth[i] = Mathf.Lerp(Mathf.Lerp(s.thighDepth, 1f, lower), P.z / Mathf.Max(0.001f, P.y), footness);
             }
 
-            var d = new MeshDraft();
+            var d = NewDraft(s);
             d.AddLoft(points, radii, LegSegments, (ring, angle) => SewnPaint(s, ring, angle), 0, depth);
 
             // Doigts : petits coussins ronds au bout du pied, en éventail
@@ -321,6 +436,7 @@ namespace ParryEverything.Editor
                 Matrix4x4.identity,
                 Matrix4x4.Translate(-knee),
                 Matrix4x4.Translate(-ankle),
+                Matrix4x4.identity,   // HipAnchor (haut de cuisse) : inutilisé par la patte générée
             };
 
             // Fourrure : bleu nuit, « chaussette » claire à partir de sockStart (entre genou et cheville) jusqu'au bout
@@ -370,7 +486,7 @@ namespace ParryEverything.Editor
             return Mathf.Exp(-x * x * 2f);
         }
 
-        private static float Smooth01(float x)
+        internal static float Smooth01(float x)
         {
             x = Mathf.Clamp01(x);
             return x * x * (3f - 2f * x);
@@ -391,30 +507,66 @@ namespace ParryEverything.Editor
         {
             Vector3 elbow = ElbowPoint(s);
             float r = s.armThickness;
-            var d = new MeshDraft();
+            var d = NewDraft(s);
             ShapedLoft(d, new[] { new Vector3(0f, 0.04f, 0f), elbow * 0.5f + new Vector3(0.01f, 0f, 0f), elbow },
                        r, s.upperArmWidth, s.upperArmBulge, 8, (ring, angle) => SewnPaint(s, ring, angle));
+
+            // Touffe derrière le coude : deux mèches qui pointent vers l'arrière et le bas
+            if (s.elbowTuft > 0f)
+            {
+                Color c = SewnPaint(s, 3, 0f);
+                for (int k = 0; k < 2; k++)
+                {
+                    Vector3 root = elbow + new Vector3(-r * 0.6f, r * (1.2f - k * 0.9f), 0f);
+                    float length = s.elbowTuft * (1f - k * 0.3f);
+                    d.AddTuft(root, new Vector3(-0.8f, -0.55f - k * 0.3f, 0f), length, r * 0.65f, new Vector3(0f, -length * 0.2f, 0f), c);
+                }
+            }
             Mesh mesh = d.ToMesh("CatUpperArm");
             ApplyFur(s, mesh, 4f, _ => s.furDark);
             return mesh;
         }
 
-        // Avant-bras : du coude (origine) au poignet, main ronde et 3 griffes (sous-mesh 1)
+        // Avant-bras : du coude (origine) au poignet, manchette de poils, main (paume + doigts) et griffes (sous-mesh 1)
         private static Mesh BuildForearm(CatModelSettings s)
         {
             float half = s.armLength * 0.5f;
             float r = s.armThickness;
             var wrist = new Vector3(0.02f, -half, 0f);
-            var d = new MeshDraft(2);
+            var d = NewDraft(s, 2);
             ShapedLoft(d, new[] { Vector3.zero, wrist * 0.5f, wrist }, r, s.forearmWidth, s.forearmBulge, 8,
                        (ring, angle) => SewnPaint(s, ring + 2, angle));
-            Vector3 hand = wrist + new Vector3(0.015f, -r * 0.9f, 0f);
-            Color handColor = Opaque(s.legColor * 1.25f);
-            d.AddEllipsoid(hand, new Vector3(r * 1.25f, r * 1.1f, r * 1.05f), handColor);
-            foreach (float z in new[] { -r * 0.6f, 0f, r * 0.6f })
+
+            // Manchette : couronne de mèches au-dessus du poignet, qui retombent sur la main
+            if (s.wristTuft > 0f)
             {
-                Vector3 root = hand + new Vector3(r * 0.9f, -r * 0.5f, z);
-                d.AddCone(root, root + new Vector3(s.clawLength * 0.6f, -s.clawLength, 0f), r * 0.28f, 5, Color.white, 1);
+                Color c = SewnPaint(s, 4, 0f);
+                const int Count = 6;
+                for (int k = 0; k < Count; k++)
+                {
+                    float a = (k + 0.5f) / Count * Mathf.PI * 2f;
+                    var radial = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                    Vector3 root = wrist + new Vector3(0f, half * 0.18f, 0f) + radial * r * 0.55f;
+                    float length = s.wristTuft * (0.8f + 0.4f * Hash01(k, 7));
+                    d.AddTuft(root, radial * 0.5f + Vector3.down, length, r * 0.5f, radial * length * 0.2f, c);
+                }
+            }
+
+            // Main : paume ronde, doigts en rang devant (légèrement repliés), une griffe courte au bout de chacun
+            Color handColor = Opaque(s.legColor * 1.25f);
+            Vector3 palm = wrist + new Vector3(0.01f, -r * 1.05f, 0f);
+            d.AddEllipsoid(palm, new Vector3(r * 1.15f, r * 1.25f, r * 1.05f), handColor);
+            int fingers = Mathf.Max(0, s.fingerCount);
+            for (int k = 0; k < fingers; k++)
+            {
+                float u = fingers == 1 ? 0f : k / (fingers - 1f) * 2f - 1f;   // −1 → 1 en travers de la main
+                Vector3 finger = palm + new Vector3(r * (0.75f - 0.12f * u * u), -r * 1.05f, u * r * 0.72f);
+                d.AddEllipsoid(finger, new Vector3(r * 0.38f, r * 0.55f, r * 0.3f), handColor);
+                if (s.clawLength > 0f)
+                {
+                    Vector3 root = finger + new Vector3(r * 0.2f, -r * 0.4f, 0f);
+                    d.AddCone(root, root + new Vector3(s.clawLength * 0.35f, -s.clawLength * 0.6f, 0f), r * 0.16f, 5, Color.white, 1);
+                }
             }
             Mesh mesh = d.ToMesh("CatForearm");
 
@@ -427,118 +579,222 @@ namespace ParryEverything.Editor
         //  Tête
         // =====================================================================
 
-        // Crâne (avec museau), oreilles, touffes des joues : sous-mesh 0 (chair + fourrure).
-        // Yeux, pupilles, truffe : sous-mesh 1 (lumineux, couleurs des sommets).
+        // Crâne (avec museau court), grandes oreilles, collerette des joues, mèches : sous-mesh 0 (chair + fourrure).
+        // Yeux en amande, pupilles, truffe : sous-mesh 1 (lumineux, couleurs des sommets).
         // Origine = base du cou (pivot de la tête).
-        private static Mesh BuildHead(CatModelSettings s)
+        // withFace = false : sans yeux ni truffe (export vers Blender : Unity les rajoute au retour, à la place des repères Eye et Nose).
+        private static Mesh BuildHead(CatModelSettings s, bool withFace = true)
         {
             Vector3 c = s.headOffset;
             Vector3 R = s.headRadii;
             var skin = new FleshSkin(s, s.seed + 11, 5, 0, 0f);
             Vector3 muzzleDir = new Vector3(1f, -0.45f, 0f).normalized;
-            var d = new MeshDraft(2);
+            Color under = Opaque(s.legColor);
+            var d = NewDraft(s, 2);
+            var marks = new FurMarks();
 
             // Crâne : ellipsoïde, le museau bombe vers l'avant et le bas
-            d.AddSphere(3, dir =>
+            d.AddSphere(s.headDetail, dir =>
             {
                 Vector3 p = Vector3.Scale(dir, R);
                 float muzzle = Mathf.Pow(Mathf.Max(0f, Vector3.Dot(dir, muzzleDir)), 3f) * s.muzzleLength;
                 return c + p + muzzleDir * muzzle;
             }, skin.Paint);
 
-            // Oreilles : cônes au sommet, écartés et penchés vers l'arrière
             foreach (float side in new[] { -1f, 1f })
             {
-                var basePoint = c + new Vector3(s.earPosition.x, s.earPosition.y, s.earPosition.z * side);
-                // Rotation Z : penche vers l'arrière ; rotation X : écarte vers l'extérieur (côté de l'oreille)
-                Vector3 up = Quaternion.Euler(s.earSpread * side, 0f, s.earBack) * Vector3.up;
-                d.AddCone(basePoint, basePoint + up * s.earLength, s.earWidth, 7, Opaque(s.legColor));
+                AddEar(s, d, marks, c, side, under);
+                AddCheekRuff(s, d, c, R, side, under);
             }
 
-            // Touffes des joues : petites pointes vers l'arrière et le bas
-            if (s.cheekTuft > 0f)
+            // Mèches du front, entre les oreilles : vers le haut et l'arrière
+            if (s.foreheadTuft > 0f)
             {
-                foreach (float side in new[] { -1f, 1f })
+                for (int k = 0; k < 3; k++)
                 {
-                    var root = c + new Vector3(R.x * 0.2f, -R.y * 0.45f, R.z * 0.75f * side);
-                    foreach (float k in new[] { 0f, 1f })
-                    {
-                        Vector3 dir = new Vector3(-0.6f - k * 0.3f, -0.4f + k * 0.35f, 0.5f * side).normalized;
-                        d.AddCone(root + new Vector3(-k * 0.03f, k * 0.04f, 0f), root + dir * s.cheekTuft,
-                                  s.cheekTuft * 0.35f, 5, Opaque(s.legColor));
-                    }
+                    float z = (k - 1) * R.z * 0.22f;
+                    Vector3 root = c + new Vector3(R.x * 0.25f, R.y * 0.88f, z);
+                    float length = s.foreheadTuft * (k == 1 ? 1.15f : 0.85f);
+                    d.AddTuft(root, new Vector3(-0.5f, 1f, z * 2f), length, length * 0.4f, new Vector3(-length * 0.35f, 0f, 0f), under);
                 }
             }
 
-            // Yeux lumineux, pupille fendue devant, truffe au bout du museau
-            foreach (float side in new[] { -1f, 1f })
-            {
-                Vector3 eye = c + new Vector3(s.eyePosition.x, s.eyePosition.y, s.eyePosition.z * -side);
-                float e = s.eyeSize;
-                d.AddEllipsoid(eye, new Vector3(e * 0.9f, e, e * 0.55f), s.eyeColor, 2, 1);
-                Vector3 pupil = eye + new Vector3(e * 0.25f, 0f, e * 0.4f * Mathf.Sign(eye.z - c.z));
-                d.AddEllipsoid(pupil, new Vector3(e * 0.18f, e * 0.75f, e * 0.25f), PupilColor, 2, 1);
-            }
-            Vector3 nose = c + muzzleDir * (R.x + s.muzzleLength * 0.9f);
-            d.AddEllipsoid(nose, new Vector3(0.025f, 0.018f, 0.03f), PupilColor, 2, 1);
+            if (withFace) AddFace(s, d, c + s.eyePosition, c + muzzleDir * (R.x + s.muzzleLength * 0.9f));
 
             Mesh mesh = d.ToMesh("CatHead");
             BakeRotation(mesh, Quaternion.Euler(s.headRotation));
 
-            // Fourrure : bleu nuit, museau et joues clairs (devant, en bas)
-            ApplyFur(s, mesh, 6f, p =>
+            // Fourrure : bleu nuit, museau et bas des joues clairs ; intérieur des oreilles clair
+            Vector3[] v = mesh.vertices;
+            Quaternion unturn = Quaternion.Inverse(Quaternion.Euler(s.headRotation));
+            ApplyFurByIndex(s, mesh, 6f, i => marks.Get(i, () =>
             {
-                Vector3 q = Quaternion.Inverse(Quaternion.Euler(s.headRotation)) * p - c;
+                Vector3 q = unturn * v[i] - c;
                 q = new Vector3(q.x / R.x, q.y / R.y, q.z / R.z);
                 float light = Mathf.InverseLerp(0.35f, 0.8f, q.x) * Mathf.InverseLerp(0.25f, -0.25f, q.y);
                 return Color.Lerp(s.furDark, s.furLight, Mathf.SmoothStep(0f, 1f, light));
-            });
+            }));
             return mesh;
+        }
+
+        // Yeux lumineux en amande (coin arrière relevé), pupille fendue devant, truffe : sous-mesh 1.
+        // eye = œil côté caméra (z < 0), l'autre est symétrique (z opposé) ; repère de la tête.
+        // eyes = false : truffe seule (yeux modelés dans Blender).
+        internal static void AddFace(CatModelSettings s, MeshDraft d, Vector3 eye, Vector3 nose, bool eyes = true)
+        {
+            Quaternion eyeTurn = Quaternion.Euler(0f, 0f, -s.eyeTilt);
+            float e = s.eyeSize;
+            foreach (float side in eyes ? new[] { 1f, -1f } : new float[0])
+            {
+                var at = new Vector3(eye.x, eye.y, eye.z * side);
+                d.AddSphere(2, dir => at + eyeTurn * Vector3.Scale(dir, new Vector3(e * 1.15f, e * 0.72f, e * 0.5f)),
+                            _ => s.eyeColor, 1);
+                // Pupille un peu devant l'œil, vers l'extérieur de la tête
+                Vector3 pupil = at + new Vector3(e * 0.2f, 0f, e * 0.4f * Mathf.Sign(at.z == 0f ? -1f : at.z));
+                d.AddEllipsoid(pupil, new Vector3(e * 0.16f, e * 0.6f, e * 0.25f), PupilColor, 2, 1);
+            }
+            d.AddEllipsoid(nose, new Vector3(0.025f, 0.018f, 0.03f), PupilColor, 2, 1);
+        }
+
+        // Places par défaut de l'œil côté caméra et de la truffe, dans le repère de la tête (rotation de la tête comprise)
+        internal static Vector3 DefaultEye(CatModelSettings s) => Quaternion.Euler(s.headRotation) * (s.headOffset + s.eyePosition);
+
+        internal static Vector3 DefaultNose(CatModelSettings s)
+        {
+            Vector3 muzzleDir = new Vector3(1f, -0.45f, 0f).normalized;
+            return Quaternion.Euler(s.headRotation) * (s.headOffset + muzzleDir * (s.headRadii.x + s.muzzleLength * 0.9f));
+        }
+
+        // Grande oreille : lame triangulaire fine (d'avant en arrière), large à la base, penchée vers l'arrière
+        // et écartée ; intérieur clair (lame plus petite, devant) et touffes qui en sortent
+        private static void AddEar(CatModelSettings s, MeshDraft d, FurMarks marks, Vector3 c, float side, Color under)
+        {
+            var basePoint = c + new Vector3(s.earPosition.x, s.earPosition.y, s.earPosition.z * side);
+            // Rotation Z : penche vers l'arrière ; rotation X : écarte vers l'extérieur (côté de l'oreille)
+            Quaternion turn = Quaternion.Euler(s.earSpread * side, 0f, s.earBack);
+            Vector3 up = turn * Vector3.up;
+            Vector3 front = turn * Vector3.right;
+            // Section : moins épaisse sur X (0.6 × largeur) que large sur Z ; la pointe se resserre.
+            // Pas trop fine sur X : vue de profil (caméra du jeu), l'oreille doit rester un triangle bien lisible
+            float thick = s.earWidth * 0.6f;
+            float flat = 1f / 0.6f;
+            AddBlade(d, basePoint - up * s.earWidth * 0.3f, up, s.earLength * 1.1f, thick, flat, under);
+
+            if (s.earInner > 0f)
+            {
+                int from = d.VertexCount;
+                float k = s.earInner;
+                Vector3 innerBase = basePoint + front * thick * 0.55f + up * s.earLength * 0.05f;
+                AddBlade(d, innerBase, up, s.earLength * k, thick * 0.6f * k, flat, Opaque(s.fleshPalette.Length > 5 ? s.fleshPalette[5] : under));
+                marks.Add(from, d.VertexCount, s.furLight);
+            }
+
+            if (s.earTuft > 0f)
+            {
+                int from = d.VertexCount;
+                for (int k = 0; k < 3; k++)
+                {
+                    Vector3 root = basePoint + front * thick * 0.7f + up * s.earLength * (0.08f + k * 0.12f);
+                    var dir = front * 0.8f + up * (0.6f + k * 0.25f) + new Vector3(0f, 0f, side * 0.3f);
+                    d.AddTuft(root, dir, s.earTuft * (1f - k * 0.2f), s.earTuft * 0.3f, up * s.earTuft * 0.3f, under);
+                }
+                marks.Add(from, d.VertexCount, s.furLight);
+            }
+        }
+
+        // Lame : tube aplati qui s'effile de la base vers la pointe (oreille)
+        private static void AddBlade(MeshDraft d, Vector3 basePoint, Vector3 up, float length, float thick, float flat, Color color)
+        {
+            var points = new[] { basePoint, basePoint + up * length * 0.4f, basePoint + up * length * 0.75f, basePoint + up * length };
+            var radii = new[] { thick, thick * 0.8f, thick * 0.45f, 0.002f };
+            var depth = new[] { flat, flat, flat, flat };
+            d.AddLoft(points, radii, 7, (_, __) => color, 0, depth);
+        }
+
+        // Collerette des joues : éventail de touffes autour de l'arrière et du bas de la tête,
+        // du dessous de l'oreille jusque sous le menton, qui partent vers l'arrière et l'extérieur
+        private static void AddCheekRuff(CatModelSettings s, MeshDraft d, Vector3 c, Vector3 R, float side, Color under)
+        {
+            int n = s.cheekTuftCount;
+            if (s.cheekTuft <= 0f || n <= 0) return;
+            for (int k = 0; k < n; k++)
+            {
+                float u = n == 1 ? 0.5f : k / (n - 1f);
+                float theta = Mathf.Lerp(150f, 290f, u) * Mathf.Deg2Rad;   // dans le profil : 180 = arrière, 270 = bas
+                var dir = new Vector3(Mathf.Cos(theta) * 0.8f, Mathf.Sin(theta) * 0.85f, side * 0.45f).normalized;
+                Vector3 root = c + Vector3.Scale(dir, R) * 0.88f;
+                // Plus longues sur la joue (milieu de l'éventail), plus courtes en haut et sous le menton
+                float length = s.cheekTuft * (0.65f + 0.45f * Mathf.Sin(u * Mathf.PI)) * (0.85f + 0.3f * Hash01(k, side > 0f ? 3 : 5));
+                // Couchées dans le plan du profil (peu de Z) : elles dépassent de la silhouette vue par la caméra du jeu
+                var flat = new Vector3(dir.x, dir.y, 0f).normalized;
+                Vector3 tuftDir = flat + new Vector3(-0.6f, -0.2f, side * 0.15f);
+                d.AddTuft(root, tuftDir, length, length * 0.45f, new Vector3(-length * 0.15f, -length * 0.2f, 0f), under, 0.5f);
+            }
         }
 
         // =====================================================================
         //  Queue
         // =====================================================================
 
-        // Un segment : de son pivot (origine) vers l'arrière (−X), effilé de la base vers le bout
+        // Rayon de la queue à la proportion t de sa longueur (0 naissance, 1 bout)
+        private static float TailRadius(CatModelSettings s, float t)
+        {
+            return Mathf.Max(0.004f, s.tailRadius * Curve(s.tailWidth, t, 1f));
+        }
+
+        // Un segment : de son pivot (origine) vers l'arrière (−X). Gros fuseau touffu :
+        //  - une boule au pivot comble le creux quand la queue se plie ;
+        //  - des touffes en couronne, couchées vers l'arrière, hérissent la silhouette (décalées d'un segment à l'autre) ;
+        //  - le dernier segment finit par une mèche en pointe.
         private static Mesh BuildTailSegment(CatModelSettings s, int index)
         {
             int n = s.tailSegments;
             float segLength = s.tailLength / n;
-            float r0 = Mathf.Lerp(s.tailBaseRadius, s.tailTipRadius, (float)index / n);
-            float r1 = Mathf.Lerp(s.tailBaseRadius, s.tailTipRadius, (float)(index + 1) / n);
-            var d = new MeshDraft();
-            // Dépasse un peu dans le segment suivant : pas de trou quand la queue se plie
-            d.AddLoft(new[] { new Vector3(segLength * 0.08f, 0f, 0f), new Vector3(-segLength * 0.5f, 0f, 0f), new Vector3(-segLength * 1.08f, 0f, 0f) },
-                      new[] { r0, (r0 + r1) * 0.5f, r1 }, 8, (ring, angle) => SewnPaint(s, index == 0 ? ring : ring + 3, angle), 0);
+            float t0 = (float)index / n, t1 = (index + 1f) / n;
+            var d = NewDraft(s);
+
+            // Fuseau : dépasse un peu dans le segment suivant (pas de trou quand la queue se plie)
+            int rings = d.LowPoly ? 3 : 5;
+            var points = new Vector3[rings];
+            var radii = new float[rings];
+            for (int i = 0; i < rings; i++)
+            {
+                float u = i / (rings - 1f);
+                points[i] = new Vector3(Mathf.Lerp(segLength * 0.08f, -segLength * 1.08f, u), 0f, 0f);
+                radii[i] = TailRadius(s, Mathf.Lerp(t0, t1, u));
+            }
+            d.AddLoft(points, radii, 10, (ring, angle) => SewnPaint(s, index == 0 ? ring : ring + 3, angle), 0);
+            if (index > 0) d.AddSphere(d.LowPoly ? 1 : 2, dir => Vector3.Scale(dir, Vector3.one * TailRadius(s, t0) * 0.97f), _ => SewnPaint(s, 3, 0f));
+
+            // Touffes : couronne au milieu du segment, inclinées vers l'arrière et vers l'extérieur
+            Color tuftColor = SewnPaint(s, 4, 0f);
+            float fullness = TailRadius(s, (t0 + t1) * 0.5f) / Mathf.Max(0.001f, s.tailRadius);
+            for (int k = 0; k < s.tailTufts; k++)
+            {
+                float a = (k + (index % 2) * 0.5f) / s.tailTufts * Mathf.PI * 2f;
+                var radial = new Vector3(0f, Mathf.Cos(a), Mathf.Sin(a));
+                float x = -segLength * (0.35f + 0.3f * Hash01(k, index + 11));
+                float r = TailRadius(s, Mathf.Lerp(t0, t1, -x / segLength));
+                Vector3 root = new Vector3(x, 0f, 0f) + radial * r * 0.8f;
+                float length = s.tailTuftLength * fullness * (0.75f + 0.5f * Hash01(k, index + 23));
+                d.AddTuft(root, radial * 0.55f + Vector3.left, length, length * 0.42f, radial * length * 0.15f, tuftColor);
+            }
+            // Bout : longue mèche en pointe
+            if (index == n - 1 && s.tailTuftLength > 0f)
+            {
+                float length = s.tailTuftLength * 1.4f;
+                d.AddTuft(new Vector3(-segLength * 0.8f, 0f, 0f), Vector3.left, length, TailRadius(s, 0.9f) * 0.9f,
+                          new Vector3(0f, length * 0.15f, 0f), tuftColor);
+            }
             Mesh mesh = d.ToMesh("CatTailSeg" + index);
 
             // Fourrure : bleu nuit qui vire à la couleur vive vers le bout
             ApplyFur(s, mesh, 7f + index, p =>
             {
                 float t = (index + Mathf.Clamp01(-p.x / segLength)) / n;
-                return Color.Lerp(s.furDark, s.furAccent, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1f, t)));
+                return Color.Lerp(s.furDark, s.furAccent, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.7f, 1.05f, t)));
             });
             return mesh;
-        }
-
-        // Flamme au bout de la queue : 3 langues de feu vers l'arrière et le haut, cœur clair à la base
-        private static Mesh BuildFlame(CatModelSettings s)
-        {
-            float f = Mathf.Max(0.001f, s.flameSize);
-            var d = new MeshDraft();
-            Vector3[] tips =
-            {
-                new Vector3(-1.5f, 0.55f, 0f), new Vector3(-0.9f, 0.9f, 0.25f), new Vector3(-1f, 0.2f, -0.3f),
-            };
-            float[] widths = { 0.5f, 0.32f, 0.3f };
-            for (int i = 0; i < tips.Length; i++)
-            {
-                Vector3 tip = tips[i] * f;
-                d.AddLoft(new[] { Vector3.zero, tip * 0.45f, tip }, new[] { widths[i] * f, widths[i] * f * 0.75f, 0.003f }, 7,
-                          (ring, _) => ring == 0 ? s.flameCoreColor : Color.Lerp(s.flameColor, s.flameColor * 0.8f, ring - 1), 0);
-            }
-            return d.ToMesh("CatTailFlame");
         }
 
         // =====================================================================
@@ -564,7 +820,7 @@ namespace ParryEverything.Editor
         }
 
         // Même chose, la couleur choisie d'après le numéro du sommet
-        private static void ApplyFurByIndex(CatModelSettings s, Mesh mesh, float seedOffset, Func<int, Color> furColor)
+        internal static void ApplyFurByIndex(CatModelSettings s, Mesh mesh, float seedOffset, Func<int, Color> furColor)
         {
             Vector3[] v = mesh.vertices;
             var fur = new List<Vector4>(v.Length);
@@ -592,7 +848,7 @@ namespace ParryEverything.Editor
 
         // La surface est découpée en morceaux : chaque point appartient au morceau dont le centre (une direction)
         // est le plus proche. Là où deux morceaux se touchent : couture (sillon + points clairs).
-        private sealed class FleshSkin
+        internal sealed class FleshSkin
         {
             private readonly CatModelSettings s;
             private readonly Vector3[] patchDirs;     // centre de chaque morceau
@@ -703,6 +959,31 @@ namespace ParryEverything.Editor
         //  Outils
         // =====================================================================
 
+        // Couleurs de fourrure imposées à des plages de sommets (intérieur des oreilles, collerette…).
+        // Les autres sommets gardent la couleur calculée d'après leur position.
+        private sealed class FurMarks
+        {
+            private readonly List<(int from, int to, Color color)> ranges = new List<(int, int, Color)>();
+
+            public void Add(int from, int to, Color color) => ranges.Add((from, to, color));
+
+            public Color Get(int vertex, Func<Color> fallback)
+            {
+                foreach ((int from, int to, Color color) in ranges)
+                {
+                    if (vertex >= from && vertex < to) return color;
+                }
+                return fallback();
+            }
+        }
+
+        // Valeur pseudo-aléatoire stable entre 0 et 1 (variation des touffes, identique à chaque reconstruction)
+        private static float Hash01(int a, int b)
+        {
+            float x = Mathf.Sin(a * 12.9898f + b * 78.233f) * 43758.547f;
+            return x - Mathf.Floor(x);
+        }
+
         // Bruit 3D approché par 3 bruits 2D (valeur entre 0 et 1, le plus souvent entre 0.3 et 0.7)
         private static float Noise(Vector3 p, float o)
         {
@@ -717,12 +998,12 @@ namespace ParryEverything.Editor
         private static void ShapedLoft(MeshDraft d, IList<Vector3> bone, float baseRadius, AnimationCurve width,
                                        AnimationCurve bulge, int segments, Func<int, float, Color> paint)
         {
-            const int Rings = 12;
-            var points = new Vector3[Rings];
-            var radii = new float[Rings];
-            for (int i = 0; i < Rings; i++)
+            int rings = d.LowPoly ? 6 : 12;
+            var points = new Vector3[rings];
+            var radii = new float[rings];
+            for (int i = 0; i < rings; i++)
             {
-                float t = i / (Rings - 1f);
+                float t = i / (rings - 1f);
                 Vector3 p = BonePoint(bone, t);
                 Vector3 tangent = (BonePoint(bone, Mathf.Min(1f, t + 0.01f)) - BonePoint(bone, Mathf.Max(0f, t - 0.01f))).normalized;
                 var front = new Vector3(-tangent.y, tangent.x, 0f);   // os vers le bas → avant = +X
@@ -760,7 +1041,7 @@ namespace ParryEverything.Editor
             return curve != null && curve.length > 0 ? curve.Evaluate(t) : fallback;
         }
 
-        private static Color Opaque(Color c)
+        internal static Color Opaque(Color c)
         {
             c.a = 1f;
             return c;
@@ -807,6 +1088,224 @@ namespace ParryEverything.Editor
             setup?.Invoke(fresh);
             AssetDatabase.CreateAsset(fresh, path);
             return fresh;
+        }
+
+        // Style low-poly : maillages grossiers (facettes visibles), rendus par FleshFacet
+        private static bool IsLowPoly(CatModelSettings s) => s.style == CatModelSettings.Style.Facets;
+
+        private static MeshDraft NewDraft(CatModelSettings s, int submeshCount = 1)
+        {
+            return new MeshDraft(submeshCount) { LowPoly = IsLowPoly(s) };
+        }
+
+        // ---------- Découpe en parties (gameplay : une vie par partie) ----------
+
+        // Torse « FleshBall » → FleshChest (au-dessus de chestSplit), FleshBelly, FleshPelvis (sous pelvisSplit),
+        // d'après la hauteur du centre de chaque triangle
+        internal static void SplitTorso(List<Mesh> meshes, CatModelSettings s)
+        {
+            Mesh torso = meshes.Find(mesh => mesh.name == "FleshBall");
+            if (torso == null) return;
+            meshes.Remove(torso);
+            meshes.Add(Subset(torso, "FleshChest", c => c.y >= s.chestSplit));
+            meshes.Add(Subset(torso, "FleshBelly", c => c.y < s.chestSplit && c.y > s.pelvisSplit));
+            meshes.Add(Subset(torso, "FleshPelvis", c => c.y <= s.pelvisSplit));
+            Object.DestroyImmediate(torso);
+        }
+
+        // Maillage sans sommets, avec ses sous-meshes (un par matériau du prefab)
+        private static Mesh EmptyMesh(string name, int submeshes)
+        {
+            var mesh = new Mesh { name = name, subMeshCount = submeshes };
+            return mesh;
+        }
+
+        // Patte « CatLegSkin » → CatLegThigh, CatLegShin, CatLegFoot : chaque triangle va à l'os qui le porte le plus
+        // (hanche, genou, cheville). Les poids des os sont gardés : les 3 parties se plient ensemble.
+        internal static void SplitLeg(List<Mesh> meshes)
+        {
+            Mesh leg = meshes.Find(mesh => mesh.name == "CatLegSkin");
+            if (leg == null) return;
+            BoneWeight[] w = leg.boneWeights;
+            meshes.Remove(leg);
+            string[] names = { "CatLegThigh", "CatLegShin", "CatLegFoot" };
+            for (int bone = 0; bone < 3; bone++)
+            {
+                int b = bone;
+                meshes.Add(Subset(leg, names[bone], null, (i0, i1, i2) => DominantBone(w, i0, i1, i2) == b));
+            }
+            Object.DestroyImmediate(leg);
+        }
+
+        private static int DominantBone(BoneWeight[] w, int i0, int i1, int i2)
+        {
+            if (w.Length == 0) return 0;
+            var sum = new float[3];
+            foreach (int i in new[] { i0, i1, i2 })
+            {
+                AddWeight(sum, w[i].boneIndex0, w[i].weight0);
+                AddWeight(sum, w[i].boneIndex1, w[i].weight1);
+                AddWeight(sum, w[i].boneIndex2, w[i].weight2);
+            }
+            return sum[0] >= sum[1] && sum[0] >= sum[2] ? 0 : sum[1] >= sum[2] ? 1 : 2;
+        }
+
+        private static void AddWeight(float[] sum, int bone, float weight)
+        {
+            if (bone == HipAnchorBone) bone = 0;   // haut de cuisse : compté avec la hanche
+            if (bone >= 0 && bone < sum.Length) sum[bone] += weight;
+        }
+
+        // Nouveau mesh avec les triangles choisis (par le centre du triangle, ou par ses 3 sommets).
+        // Garde couleurs, fourrure (UV1), veines (UV2), poids et poses des os. Tout dans le sous-mesh 0.
+        private static Mesh Subset(Mesh source, string name, Func<Vector3, bool> byCenter,
+                                   Func<int, int, int, bool> byCorners = null)
+        {
+            Vector3[] v = source.vertices;
+            Color[] colors = source.colors;
+            var fur = new List<Vector4>();
+            var veins = new List<Vector4>();
+            source.GetUVs(1, fur);
+            source.GetUVs(2, veins);
+            BoneWeight[] weights = source.boneWeights;
+
+            var map = new Dictionary<int, int>();
+            var nv = new List<Vector3>();
+            var nc = new List<Color>();
+            var nf = new List<Vector4>();
+            var nvein = new List<Vector4>();
+            var nw = new List<BoneWeight>();
+            var tris = new List<int>();
+            for (int sub = 0; sub < source.subMeshCount; sub++)
+            {
+                int[] t = source.GetTriangles(sub);
+                for (int i = 0; i + 2 < t.Length; i += 3)
+                {
+                    bool keep = byCorners != null
+                        ? byCorners(t[i], t[i + 1], t[i + 2])
+                        : byCenter((v[t[i]] + v[t[i + 1]] + v[t[i + 2]]) / 3f);
+                    if (!keep) continue;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int old = t[i + k];
+                        if (!map.TryGetValue(old, out int idx))
+                        {
+                            idx = nv.Count;
+                            map[old] = idx;
+                            nv.Add(v[old]);
+                            if (colors.Length == v.Length) nc.Add(colors[old]);
+                            if (fur.Count == v.Length) nf.Add(fur[old]);
+                            if (veins.Count == v.Length) nvein.Add(veins[old]);
+                            if (weights.Length == v.Length) nw.Add(weights[old]);
+                        }
+                        tris.Add(idx);
+                    }
+                }
+            }
+
+            var mesh = new Mesh { name = name };
+            if (nv.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.SetVertices(nv);
+            if (nc.Count > 0) mesh.SetColors(nc);
+            if (nf.Count > 0) mesh.SetUVs(1, nf);
+            if (nvein.Count > 0) mesh.SetUVs(2, nvein);
+            mesh.SetTriangles(tris, 0);
+            if (nw.Count > 0)
+            {
+                mesh.boneWeights = nw.ToArray();
+                mesh.bindposes = source.bindposes;
+            }
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        // Low-poly : chaque triangle a ses propres sommets, d'une seule couleur (moyenne de ses coins) et d'une
+        // seule normale → facettes unies et nettes. Les poids des os (patte) restent ceux de chaque coin.
+        internal static void FlattenFaces(Mesh mesh)
+        {
+            Vector3[] v = mesh.vertices;
+            Color[] colors = mesh.colors;
+            var fur = new List<Vector4>();
+            var veins = new List<Vector4>();
+            mesh.GetUVs(1, fur);
+            mesh.GetUVs(2, veins);
+            BoneWeight[] weights = mesh.boneWeights;
+            Matrix4x4[] bindposes = mesh.bindposes;
+
+            int subCount = mesh.subMeshCount;
+            var tris = new int[subCount][];
+            int total = 0;
+            for (int s = 0; s < subCount; s++)
+            {
+                tris[s] = mesh.GetTriangles(s);
+                total += tris[s].Length;
+            }
+
+            var nv = new Vector3[total];
+            var nc = new Color[colors.Length > 0 ? total : 0];
+            var nf = new List<Vector4>(fur.Count > 0 ? total : 0);
+            var nvein = new List<Vector4>(veins.Count > 0 ? total : 0);
+            var nw = new BoneWeight[weights.Length > 0 ? total : 0];
+            var newTris = new int[subCount][];
+            int n = 0;
+            for (int s = 0; s < subCount; s++)
+            {
+                newTris[s] = new int[tris[s].Length];
+                for (int i = 0; i + 2 < tris[s].Length; i += 3)
+                {
+                    int a = tris[s][i], b = tris[s][i + 1], c = tris[s][i + 2];
+                    Color faceColor = nc.Length > 0 ? (colors[a] + colors[b] + colors[c]) / 3f : Color.white;
+                    Vector4 faceFur = fur.Count > 0 ? (fur[a] + fur[b] + fur[c]) / 3f : Vector4.zero;
+                    Vector4 faceVein = veins.Count > 0 ? (veins[a] + veins[b] + veins[c]) / 3f : Vector4.zero;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int idx = tris[s][i + k];
+                        nv[n] = v[idx];
+                        if (nc.Length > 0) nc[n] = faceColor;
+                        if (fur.Count > 0) nf.Add(faceFur);
+                        if (veins.Count > 0) nvein.Add(faceVein);
+                        if (nw.Length > 0) nw[n] = weights[idx];
+                        newTris[s][i + k] = n;
+                        n++;
+                    }
+                }
+            }
+
+            mesh.Clear();
+            mesh.indexFormat = total > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+            mesh.vertices = nv;
+            if (nc.Length > 0) mesh.colors = nc;
+            if (nf.Count > 0) mesh.SetUVs(1, nf);
+            if (nvein.Count > 0) mesh.SetUVs(2, nvein);
+            mesh.subMeshCount = subCount;
+            for (int s = 0; s < subCount; s++) mesh.SetTriangles(newTris[s], s);
+            if (nw.Length > 0)
+            {
+                mesh.boneWeights = nw;
+                mesh.bindposes = bindposes;
+            }
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
+        }
+
+        // Shader du corps selon le style choisi (tous lisent les mêmes données de chair et de fourrure)
+        private static void ApplyStyle(CatModelSettings s, Material material)
+        {
+            string name;
+            switch (s.style)
+            {
+                case CatModelSettings.Style.Fur: name = "Custom/FleshFur"; break;
+                case CatModelSettings.Style.Toon: name = "Custom/FleshToon"; break;
+                case CatModelSettings.Style.Facets: name = "Custom/FleshFacet"; break;
+                default: name = "Custom/FleshLit"; break;
+            }
+            Shader shader = Shader.Find(name);
+            if (shader == null || material.shader == shader) return;
+            material.shader = shader;
+            EditorUtility.SetDirty(material);
         }
 
         // Le fichier contient un mesh principal vide (conteneur, porte le nom du fichier) et les vrais meshes
