@@ -15,8 +15,10 @@ namespace ParryEverything.Editor
     //
     // Données des sommets ajoutés (lues par FleshCore.cginc) :
     //  - couleur : fil en alpha 0 (reste sombre), bourrelet en alpha 1 (chair : vire à vif, saigne) ;
-    //  - UV1 = (0, 0, 0, 2) : seuil de fourrure au-delà de 1, jamais de fourrure dessus ;
-    //  - UV2.y = 1 sur le bourrelet : il luit quand le membre est abîmé.
+    //  - UV1 = (bourrelet, numéro du point, 0, 2) : seuil de fourrure au-delà de 1 (jamais de fourrure dessus), rg lus
+    //    par le shader à la place de la couleur de fourrure ;
+    //  - UV2.y = 1 sur le bourrelet : il s'ouvre en fente sombre quand le membre est abîmé ;
+    //  - UV2.z = numéro du point de fil (0,02 à 1) : les plus petits sautent d'abord quand le membre s'abîme.
     internal static class CatSutures
     {
         private const int Sectors = 24;          // secteurs de l'anneau (rayon et hauteur moyens par secteur)
@@ -150,9 +152,9 @@ namespace ParryEverything.Editor
             var rng = new System.Random(s.seed * 7919 + seed * 104729);
             AddLip(s, d, ring, rng);
             int lipEnd = d.VertexCount;
-            AddStitches(s, d, ring, rng);
+            List<(int from, int to, float id)> stitches = AddStitches(s, d, ring, rng);
             Mesh suture = d.ToMesh("Suture");
-            Append(childMesh, suture, lipEnd, toLocal);
+            Append(childMesh, suture, lipEnd, stitches, toLocal);
             UnityEngine.Object.DestroyImmediate(suture);
         }
 
@@ -375,8 +377,11 @@ namespace ParryEverything.Editor
         // Points de couture en travers de la jonction : arc de fil qui sort de la peau, passe sur le bourrelet
         // et y replonge. Désordre : décalés, de travers, longueurs inégales, quelques trous, des croix,
         // un bout de fil qui pend.
-        private static void AddStitches(CatModelSettings s, MeshDraft d, Ring ring, System.Random rng)
+        // Renvoie, pour chaque point, ses sommets [from, to) et son numéro (0,02 à 1) : quand le membre s'abîme,
+        // le shader fait sauter les points de plus petit numéro d'abord (coutures qui lâchent).
+        private static List<(int from, int to, float id)> AddStitches(CatModelSettings s, MeshDraft d, Ring ring, System.Random rng)
         {
+            var stitches = new List<(int from, int to, float id)>();
             int count = Mathf.Max(5, Mathf.RoundToInt(ring.Circumference / s.stitchSpacing));
             float mess = s.stitchMess;
             int loose = rng.Next(count);   // le point d'où pend un bout de fil
@@ -386,6 +391,7 @@ namespace ParryEverything.Editor
                 float t = (k + ((float)rng.NextDouble() - 0.5f) * mess * 0.8f) / count;
                 float tilt = ((float)rng.NextDouble() * 2f - 1f) * mess * 45f;
                 float length = s.stitchLength * (1f + ((float)rng.NextDouble() - 0.5f) * mess * 0.9f);
+                int from = d.VertexCount;
                 Vector3 end = AddStitch(s, d, ring, t, tilt, length);
                 if (rng.NextDouble() < s.stitchCross)
                 {
@@ -400,7 +406,9 @@ namespace ParryEverything.Editor
                     float len = s.stitchLength * 0.9f;
                     d.AddTuft(end, hang, len, s.stitchThread * 0.9f, ring.Tangent(t) * len * 0.3f, s.threadColor, 1f, 4);
                 }
+                stitches.Add((from, d.VertexCount, 0.02f + 0.98f * (float)rng.NextDouble()));
             }
+            return stitches;
         }
 
         // Un point de fil ; renvoie son extrémité (côté enfant)
@@ -425,7 +433,9 @@ namespace ParryEverything.Editor
         }
 
         // Ajoute la suture au sous-mesh 0 de l'enfant (sommets ramenés dans son repère)
-        private static void Append(Mesh target, Mesh suture, int lipEnd, Func<Vector3, Vector3> toLocal)
+        // stitches : sommets de chaque point de fil et son numéro (UV2.z)
+        private static void Append(Mesh target, Mesh suture, int lipEnd, List<(int from, int to, float id)> stitches,
+                                   Func<Vector3, Vector3> toLocal)
         {
             var v = new List<Vector3>(target.vertices);
             var c = new List<Color>(target.colors);
@@ -444,8 +454,15 @@ namespace ParryEverything.Editor
             {
                 v.Add(toLocal(sv[i]));
                 c.Add(sc[i]);
-                fur.Add(new Vector4(0f, 0f, 0f, 2f));
-                veins.Add(new Vector4(0f, i < lipEnd ? 1f : 0f, 0f, 0f));
+                float id = 0f;
+                foreach ((int from, int to, float stitchId) in stitches)
+                {
+                    if (i >= from && i < to) id = stitchId;
+                }
+                // UV1 : seuil 2 (jamais de fourrure) ; rg = bourrelet, numéro du point (lus par le shader à la place
+                // de la couleur de fourrure, inutile ici). UV2 : mêmes données, pour les outils.
+                fur.Add(new Vector4(i < lipEnd ? 1f : 0f, id, 0f, 2f));
+                veins.Add(new Vector4(0f, i < lipEnd ? 1f : 0f, id, 0f));
             }
 
             int subCount = Mathf.Max(1, target.subMeshCount);

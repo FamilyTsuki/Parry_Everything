@@ -174,19 +174,6 @@ namespace ParryEverything.Player
                 body = gameObject.AddComponent<PlayerBody>();
             }
             perfectChain = new PerfectParryChain(perfectChainGap, 3);
-            body.OnLimbLost += HandleLimbLost;
-        }
-
-        private void OnDestroy()
-        {
-            if (body != null) body.OnLimbLost -= HandleLimbLost;
-        }
-
-        // Membre arraché : il tombe au sol, on peut revenir le ramasser
-        private void HandleLimbLost(Limb limb)
-        {
-            LimbPickup.Spawn(body, limb, limb.WorldAnchor(transform.position, facing), facing);
-            SpawnSparks(limb.WorldAnchor(transform.position, facing), hurtColor, 70, 1.5f);
         }
 
         private void Start()
@@ -529,7 +516,7 @@ namespace ParryEverything.Player
             // Avec un corps, le coup touche la patte la plus proche du point d'impact
             Vector3 impact = hitPoint ?? (source != null ? source.position : transform.position);
             Limb target = body.HasBody ? body.NearestLimb(impact, facing) : null;
-            bool killed = body.ApplyDamage(damage, target);
+            bool killed = body.ApplyDamage(damage, target, impact);
             perfectChain.Reset();
 
             Vector3 bloodPos = transform.position;

@@ -39,7 +39,7 @@ Shader "Custom/FleshFacet"
         {
             float4 color : COLOR;
             float4 furData;
-            float2 vein;     // x : veines, y : bourrelet des sutures
+            float4 restVein;   // xyz : position de repos (UV3), w : veines
             float3 worldPos;
             float3 worldNormal;
         };
@@ -69,12 +69,12 @@ Shader "Custom/FleshFacet"
         {
             UNITY_INITIALIZE_OUTPUT(Input, o);
             o.furData = v.texcoord1;
-            o.vein = v.texcoord2.xy;
+            o.restVein = float4(v.texcoord3.xyz, v.texcoord2.x);
         }
 
         void surf (Input IN, inout SurfaceOutputFacet o)
         {
-            FleshLook look = ComputeFlesh(IN.color, IN.furData, IN.vein);
+            FleshLook look = ComputeFlesh(IN.color, IN.furData, IN.restVein);
             // Normale de la face : perpendiculaire aux variations de position d'un pixel à l'autre
             half3 flat = normalize(cross(ddy(IN.worldPos), ddx(IN.worldPos)));
             if (dot(flat, IN.worldNormal) < 0) flat = -flat;

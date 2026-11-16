@@ -49,6 +49,8 @@ namespace ParryEverything.Player
         // Taille visée de l'âme : pleine = 1, presque consumée = soulMinScale
         public float SoulScale => Mathf.Lerp(soulMinScale, 1f, SoulRatio);
         public IReadOnlyList<Limb> Limbs => limbs;
+        // Point du monde où le dernier coup a touché (null : inconnu, ex. chute) ; lu par OnLimbDamaged (plaies)
+        public Vector3? LastHitPoint { get; private set; }
 
         // La chair tient : le chat a un corps (boule ou debout)
         public bool HasBody => FleshLimb != null;
@@ -97,10 +99,12 @@ namespace ParryEverything.Player
 
         // Applique un coup. Renvoie true si ce coup tue le joueur.
         // target : membre touché (le plus proche du coup, voir NearestLimb) ; null = la chair, ou le premier membre intact.
-        public bool ApplyDamage(float damage, Limb target = null)
+        // hitPoint : point d'impact dans le monde (plaie dessinée à cet endroit), facultatif.
+        public bool ApplyDamage(float damage, Limb target = null, Vector3? hitPoint = null)
         {
             if (dead || Invulnerable) return false;
             lastHitTime = Time.time;
+            LastHitPoint = hitPoint;
 
             if (HasBody)
             {
@@ -125,6 +129,7 @@ namespace ParryEverything.Player
         public void TearLimb(Limb limb)
         {
             if (Invulnerable || limb == null || limb.IsTorn || !limbs.Contains(limb)) return;
+            LastHitPoint = null;
             limb.Damage(limb.Life);
             OnLimbDamaged?.Invoke(limb);
             LoseLimb(limb);

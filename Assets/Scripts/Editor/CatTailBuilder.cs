@@ -10,7 +10,10 @@ namespace ParryEverything.Editor
     // Les os ne tournent qu'autour de Z (plan de profil) ; CatBody les anime.
     internal static class CatTailBuilder
     {
-        internal const int BoneCount = 24;
+        internal const int BoneCount = 40;
+        // Subdivisions du maillage (chaque passe coupe chaque triangle en 4) : sans sommets intermédiaires le long de la
+        // queue, le maillage ne peut pas se courber en douceur, quel que soit le nombre d'os
+        private const int Subdivisions = 2;
         internal const string MeshName = "CatTail";
 
         // Chaîne d'os au repos, dans le repère de la racine du prefab (naissance de la queue)
@@ -74,6 +77,7 @@ namespace ParryEverything.Editor
             }
 
             Mesh tail = Combine(segments, frames);
+            for (int pass = 0; pass < Subdivisions; pass++) Subdivide(tail);
             tail.boneWeights = Weights(tail.vertices, points);
             tail.bindposes = bindposes;
             tail.RecalculateBounds();
@@ -123,6 +127,56 @@ namespace ParryEverything.Editor
             mesh.RecalculateTangents();
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        // Chaque triangle coupé en 4 par le milieu de ses côtés. Sommets non partagés entre triangles (le style
+        // low-poly les sépare de toute façon) ; couleur, fourrure (UV1), veines et sutures (UV2) interpolées.
+        private static void Subdivide(Mesh mesh)
+        {
+            Vector3[] v = mesh.vertices;
+            Color[] c = mesh.colors;
+            var fur = new List<Vector4>();
+            var veins = new List<Vector4>();
+            mesh.GetUVs(1, fur);
+            mesh.GetUVs(2, veins);
+            int[] t = mesh.triangles;
+
+            var nv = new List<Vector3>(t.Length * 4);
+            var nc = new List<Color>(t.Length * 4);
+            var nf = new List<Vector4>(t.Length * 4);
+            var nvein = new List<Vector4>(t.Length * 4);
+            var nt = new List<int>(t.Length * 4);
+            for (int i = 0; i + 2 < t.Length; i += 3)
+            {
+                int a = t[i], b = t[i + 1], d = t[i + 2];
+                // Coins puis milieux : 0 = a, 1 = b, 2 = d, 3 = ab, 4 = bd, 5 = da
+                int start = nv.Count;
+                foreach ((int p, int q) in new[] { (a, a), (b, b), (d, d), (a, b), (b, d), (d, a) })
+                {
+                    nv.Add((v[p] + v[q]) * 0.5f);
+                    nc.Add(c.Length == v.Length ? (c[p] + c[q]) * 0.5f : Color.white);
+                    nf.Add(fur.Count == v.Length ? (fur[p] + fur[q]) * 0.5f : Vector4.zero);
+                    nvein.Add(veins.Count == v.Length ? (veins[p] + veins[q]) * 0.5f : Vector4.zero);
+                }
+                nt.AddRange(new[]
+                {
+                    start, start + 3, start + 5,
+                    start + 3, start + 1, start + 4,
+                    start + 5, start + 4, start + 2,
+                    start + 3, start + 4, start + 5,
+                });
+            }
+
+            mesh.Clear();
+            mesh.indexFormat = nv.Count > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+            mesh.SetVertices(nv);
+            mesh.SetColors(nc);
+            mesh.SetUVs(1, nf);
+            mesh.SetUVs(2, nvein);
+            mesh.SetTriangles(nt, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
         }
 
         // Poids : place du sommet le long de la ligne des os (point le plus proche), fondue entre les deux os voisins.

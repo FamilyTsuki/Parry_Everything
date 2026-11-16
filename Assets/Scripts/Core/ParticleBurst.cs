@@ -3,6 +3,7 @@ using UnityEngine;
 namespace ParryEverything.Core
 {
     // Gerbe de particules ponctuelle (étincelles, éclats, braises), détruite automatiquement à la fin.
+    // direction (facultatif) : jet en cône d'ouverture coneAngle dans cette direction, au lieu d'une gerbe dans tous les sens.
     public static class ParticleBurst
     {
         public static ParticleSystem Spawn(
@@ -15,7 +16,9 @@ namespace ParryEverything.Core
             Vector2 size,
             float gravity,
             float radius,
-            float duration = 0.3f)
+            float duration = 0.3f,
+            Vector3? direction = null,
+            float coneAngle = 25f)
         {
             GameObject go = new GameObject(name);
             go.transform.position = position;
@@ -39,8 +42,18 @@ namespace ParryEverything.Core
             emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)count) });
 
             var shape = ps.shape;
-            shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = radius;
+            if (direction.HasValue && direction.Value.sqrMagnitude > 1e-6f)
+            {
+                shape.shapeType = ParticleSystemShapeType.Cone;
+                shape.angle = coneAngle;
+                shape.radius = radius;
+                go.transform.rotation = Quaternion.LookRotation(direction.Value.normalized);
+            }
+            else
+            {
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = radius;
+            }
 
             // Les particules rétrécissent jusqu'à disparaître
             var sizeOverLifetime = ps.sizeOverLifetime;

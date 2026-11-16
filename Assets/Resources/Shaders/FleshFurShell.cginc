@@ -1,6 +1,7 @@
 // Une couche de poils (« shell fur ») de FleshFur.shader. Inclus une fois par couche, avec SHELL_K défini
 // (0 = racine, 1 = pointe) : le maillage est regonflé le long des normales et seuls les poils restent visibles.
 // Les poils poussent seulement là où la fourrure est présente (FurCoverage) : un membre abîmé les perd par plaques.
+#define FLESH_NO_DETAIL   // couches de poils : ni fissures ni plaies (pas de place pour la position de repos)
 #include "FleshCore.cginc"
 
 half _FurLength;     // longueur des poils (mètres)
@@ -34,7 +35,7 @@ float StrandHash (float3 cell)
 
 void surfShell (Input IN, inout SurfaceOutputStandard o)
 {
-    FleshLook look = ComputeFlesh(IN.color, IN.furData, float2(IN.vein, 0));
+    FleshLook look = ComputeFlesh(IN.color, IN.furData, float4(0, 0, 0, IN.vein));
     // Pas de poil sur la chair à nu
     clip(look.fur - 0.5);
 

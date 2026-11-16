@@ -17,9 +17,10 @@ namespace ParryEverything.Player
     //    pour parer ; la queue ondule au repos, file et claque dans le vent du mouvement, fouette aux arrêts.
     // État de chaque membre (shader FleshLit) :
     //  - en bonne santé, il est couvert de fourrure ; abîmé, elle part par plaques et la chair cousue apparaît,
-    //    puis vire à vif (_Fur, _Damage) ; presque arraché, il tremble ;
+    //    il se ternit, ses coutures lâchent, des plaies marquent les impacts
+    //    (_Fur, _Damage, _Wounds : fondus lentement après chaque coup) ;
     //  - hémorragie : la chair rougit, pulse et goutte ; infection : veines violacées ; hypertrophie : il gonfle.
-    // Une parade réussie fait flasher tout le corps (_Flash).
+    // Une parade réussie fait flasher tout le corps (_Flash) ; un coup, seulement le membre touché.
     public class CatBody : MonoBehaviour
     {
         [Header("Modèles")]
@@ -139,17 +140,14 @@ namespace ParryEverything.Player
 
         [Header("Queue")]
         // Queue continue (chaîne d'os, CatTailBuilder) : sa forme est une courbure le long de sa longueur, intégrée os par os.
-        // Au repos : elle enchaîne des gestes de chat (point d'interrogation, balayage lent, pause attentive, crochet qui
-        // bascule), fondus lentement l'un dans l'autre ; respiration, balancement en profondeur.
-        // Tout s'efface avec la vitesse.
+        // Au repos : ondulation continue, presque immobile à la base, de plus en plus ample vers le bout (chaque os se plie
+        // de sin(ωt − k·déphasage) × amplitude × r^1,1 × (1 + 2r²)) ; respiration, balancement en profondeur. Tout s'efface avec la vitesse.
         // En mouvement : le vent (opposé à la vitesse, chute et saut compris) la couche dans son sens, elle claque à pleine
-        // vitesse. Chaque os suit sa cible avec un ressort plus mou vers le bout : les gestes partent de la base et
-        // arrivent au bout en retard, la queue fouette aux arrêts.
-        [SerializeField] private float tailIdle = 1f;             // force des gestes au repos (0 : queue immobile)
-        [SerializeField] private float tailIdleTempo = 1f;        // rythme des gestes (plus grand : plus vifs)
-        [SerializeField] private float tailGestureMin = 4f;       // durée d'un geste (s, tirée entre min et max)
-        [SerializeField] private float tailGestureMax = 8f;
-        [SerializeField] private float tailGestureBlend = 1.8f;   // fondu d'un geste au suivant (s)
+        // vitesse. Chaque os suit le vent avec un ressort plus mou vers le bout : la queue fouette aux arrêts.
+        [SerializeField] private float tailIdle = 1f;             // force de l'ondulation au repos (0 : queue immobile)
+        [SerializeField] private float tailIdleAmplitude = 11f;   // pli maximal d'un os (degrés, pour 25 os ; × r^1,1 × (1 + 2r²))
+        [SerializeField] private float tailIdlePhaseStep = 0.22f; // déphasage d'un os au suivant (radians, pour 25 os)
+        [SerializeField] private float tailIdleSpeed = 3.5f;      // vitesse de la vague (radians / s ; 3,5 ≈ 1,8 s par battement)
         [SerializeField] private float tailBreath = 3f;           // la queue monte et descend avec la respiration (degrés)
         [SerializeField] private float tailDepth = 7f;            // balancement vers / loin de la caméra (degrés, au bout)
         [SerializeField] private float tailWaveSpeed = 2.6f;      // rythme de base du claquement (s'y ajoute tailFlutterSpeed)
@@ -165,6 +163,10 @@ namespace ParryEverything.Player
         [Range(0.05f, 1f)] [SerializeField] private float tailTipSoftness = 0.3f;   // raideur du bout par rapport à la base
 
         [Header("État des membres")]
+        // Un membre abîmé glisse lentement vers sa chair cousue (la fourrure tombe par plaques), se ternit ;
+        // plaies aux points d'impact ; points de couture qui sautent. Pas de teinte rouge.
+        [SerializeField] private float lookFadeTime = 1.5f;      // durée du fondu vers le nouvel état après un coup (s)
+        [SerializeField] private float hitFlashTime = 0.12f;     // flash blanc du membre touché (s)
         [Range(0f, 1f)] [SerializeField] private float furFullAbove = 0.85f;   // vie au-dessus : fourrure intacte
         [Range(0f, 1f)] [SerializeField] private float furGoneBelow = 0.15f;   // vie en dessous : plus de fourrure
         [SerializeField] private float hypertrophyScale = 1.25f;  // hypertrophie : le membre gonfle
@@ -172,7 +174,6 @@ namespace ParryEverything.Player
         [Range(0f, 1f)] [SerializeField] private float infectionMin = 0.35f;   // infection : étendue des veines, vie pleine
 
         [Header("Ressenti")]
-        [Range(0f, 1f)] [SerializeField] private float shakeBelow = 0.35f;   // tremble sous cette part de vie
         [SerializeField] private float parryFlashTime = 0.1f;
 
         [Header("Lumière du corps")]
@@ -205,6 +206,11 @@ namespace ParryEverything.Player
             public int side;                // bras : −1 côté caméra, +1 côté loin
             public float swell = 1f;        // hypertrophie : facteur de taille ce frame
             public float dripTimer;         // hémorragie : prochaine goutte
+            // Apparence affichée (fondue lentement vers l'état du membre ; −1 : pas encore affichée)
+            public float shownFur = -1f, shownDamage = -1f;
+            public float hitFlash;          // flash blanc du coup (1 → 0)
+            public Vector4[][] wounds;      // par rendu : plaies (xyz repos du maillage, w graine ; w = 0 : aucune)
+            public int woundNext;           // prochaine plaie à remplacer (les 4 dernières restent)
             // Marche (pattes)
             public Vector3 foot;            // position actuelle de la cheville (monde)
             public bool hasFoot;
@@ -218,10 +224,7 @@ namespace ParryEverything.Player
             // Queue : par segment, direction de repos (degrés, repère du torse), décalage du ressort et sa vitesse
             public float[] tailRestAngle, tailBend, tailBendVel;
             public float tailPhase;         // phase du claquement (son rythme change avec la vitesse)
-            public int tailGesture, tailNextGesture;   // geste en cours et suivant (TailGestures)
-            public float tailGestureTimer;  // temps restant avant de passer au geste suivant (s)
-            public float tailGestureBlend = 1f;   // 0 → 1 : fondu du geste en cours vers le suivant
-            public float tailIdleClock;     // horloge des gestes (avance au rythme tailIdleTempo)
+            public float tailIdleClock;     // phase de l'ondulation au repos (avance à tailIdleSpeed)
         }
 
         // Pieds du joueur sous son centre (bas du collider) : le sol du fichier Blender est à cette hauteur
@@ -232,6 +235,10 @@ namespace ParryEverything.Player
         private static readonly int FurId = Shader.PropertyToID("_Fur");
         private static readonly int BleedId = Shader.PropertyToID("_Bleed");
         private static readonly int InfectionId = Shader.PropertyToID("_Infection");
+        private static readonly int WoundsId = Shader.PropertyToID("_Wounds");
+        private const int MaxWounds = 4;   // taille du tableau _Wounds du shader (FleshCore)
+        // Sommets de repos des maillages (lus une fois) : placer les plaies sur la peau
+        private static readonly Dictionary<Mesh, Vector3[]> restVertices = new Dictionary<Mesh, Vector3[]>();
 
         private static Mesh legMesh;
         private static Mesh lumpMesh;
@@ -312,14 +319,282 @@ namespace ParryEverything.Player
         private void OnEnable()
         {
             PlayerController.OnParry += HandleParry;
+            if (body != null) body.OnLimbDamaged += HandleLimbDamaged;
+            if (body != null) body.OnLimbLost += HandleLimbLost;
         }
 
         private void OnDisable()
         {
             PlayerController.OnParry -= HandleParry;
+            if (body != null) body.OnLimbDamaged -= HandleLimbDamaged;
+            if (body != null) body.OnLimbLost -= HandleLimbLost;
             generated.DestroyAll();
             fill = null;
             views.Clear();
+        }
+
+        // ---------- Membre arraché : il tombe vraiment, et saigne ----------
+
+        // Membres tombés pendant ce frame (un membre arraché emporte ce qui est cousu dessus : ils tombent ensemble)
+        private readonly Dictionary<Limb, LimbPickup> fallenThisFrame = new Dictionary<Limb, LimbPickup>();
+        private int fallenFrame = -1;
+        private static PhysicsMaterial debrisMaterial;
+
+        // Le membre est figé dans sa pose et son état (copie de ses rendus), puis tombe au sol et y reste (LimbPickup).
+        // Cousu sur un membre qui tombe au même moment : il reste attaché à lui. Sinon : jet de sang au décrochement,
+        // le moignon goutte quelques secondes, le membre aussi, et une flaque s'étale sous lui.
+        private void HandleLimbLost(Limb limb)
+        {
+            if (Time.frameCount != fallenFrame)
+            {
+                fallenThisFrame.Clear();
+                fallenFrame = Time.frameCount;
+            }
+            float facing = controller != null && controller.Facing < 0f ? -1f : 1f;
+            Vector3 stump = limb.WorldAnchor(transform.position, facing);
+
+            // Porteur : un ancêtre tombé au même moment, ou la chair qui vient d'éclater (tout le corps tombe d'un bloc)
+            LimbPickup carrier = null;
+            for (Limb up = body.ParentOf(limb); up != null && carrier == null; up = body.ParentOf(up))
+            {
+                fallenThisFrame.TryGetValue(up, out carrier);
+            }
+            if (carrier == null)
+            {
+                foreach (KeyValuePair<Limb, LimbPickup> fallen in fallenThisFrame)
+                {
+                    if (fallen.Key.Kind == LimbKind.Flesh) carrier = fallen.Value;
+                }
+            }
+
+            LimbView view = ViewOf(limb);
+            List<Object> created = null;
+            GameObject piece = view != null ? FreezeLimb(view, carrier != null ? carrier.transform : null, out created) : null;
+            if (piece == null)
+            {
+                if (carrier != null) carrier.Add(limb);
+                else fallenThisFrame[limb] = LimbPickup.Spawn(body, limb, stump, facing);
+                return;
+            }
+
+            if (carrier != null)
+            {
+                carrier.Add(limb);
+                foreach (Object obj in created) carrier.Own(obj);
+                FitCollider(carrier.gameObject);
+                fallenThisFrame[limb] = carrier;
+                return;
+            }
+
+            LimbPickup pickup = LimbPickup.Attach(piece, body, limb);
+            foreach (Object obj in created) pickup.Own(obj);
+            fallenThisFrame[limb] = pickup;
+            FitCollider(piece);
+
+            // Chute : poussé vers l'extérieur et un peu vers le haut, en tournant ; dans le plan du jeu
+            var fall = piece.AddComponent<Rigidbody>();
+            fall.mass = 1.5f;
+            fall.interpolation = RigidbodyInterpolation.Interpolate;
+            fall.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            fall.constraints = RigidbodyConstraints.FreezePositionZ | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY;
+            Vector3 outward = piece.transform.position - transform.position;
+            float side = Mathf.Abs(outward.x) > 0.05f ? Mathf.Sign(outward.x) : -facing;
+            Vector3 carried = rb != null ? rb.linearVelocity * 0.5f : Vector3.zero;
+            fall.linearVelocity = new Vector3(side * Random.Range(0.8f, 1.6f), Random.Range(1.4f, 2.4f), 0f) + carried;
+            fall.angularVelocity = new Vector3(0f, 0f, Random.Range(-6f, 6f));
+            // Ne bute pas sur le joueur (le déclencheur de ramassage, lui, doit le voir)
+            Collider solid = piece.GetComponent<BoxCollider>();
+            foreach (Collider c in GetComponentsInChildren<Collider>())
+            {
+                if (solid != null && c != null) Physics.IgnoreCollision(solid, c);
+            }
+
+            // Sang : jet plus franc au décrochement, dans le sens de l'arrachage
+            Vector3 spurt = (stump - transform.position).normalized + Vector3.up * 0.4f;
+            ParticleBurst.Spawn("LimbTornBlood", stump, BloodDrip.Blood, 28,
+                lifetime: new Vector2(0.35f, 0.8f), speed: new Vector2(1.6f, 3.6f), size: new Vector2(0.035f, 0.075f),
+                gravity: 1.6f, radius: 0.04f, direction: spurt, coneAngle: 22f);
+            // Le membre goutte un peu par sa plaie, puis une flaque s'étale sous lui
+            BloodDrip.Begin(piece, stump, 2.2f, pool: true, destroyHostWhenDone: false, ignore: transform);
+            // Le moignon goutte ~3 s (il suit le corps)
+            Limb parent = body.ParentOf(limb);
+            LimbView parentView = parent != null && !parent.IsTorn ? ViewOf(parent) : null;
+            Transform host = parentView != null ? (parentView.ball != null ? parentView.ball : parentView.root) : transform;
+            var wound = new GameObject("Moignon");
+            wound.transform.SetParent(host, false);
+            wound.transform.position = stump;
+            BloodDrip.Begin(wound, stump, 3f, pool: false, destroyHostWhenDone: true);
+        }
+
+        // Copie figée des rendus d'un membre (pose et apparence du moment : fourrure, usure, plaies, sutures).
+        // Maillage déformé par des os : figé (BakeMesh). Racine au centre du membre, sans rotation.
+        private GameObject FreezeLimb(LimbView view, Transform carrier, out List<Object> created)
+        {
+            created = new List<Object>();
+            var parts = new List<Renderer>();
+            Bounds bounds = default;
+            foreach (Renderer r in view.renderers)
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                if (parts.Count == 0) bounds = r.bounds;
+                else bounds.Encapsulate(r.bounds);
+                parts.Add(r);
+            }
+            if (parts.Count == 0) return null;
+
+            var root = new GameObject("Membre arraché");
+            root.transform.position = bounds.center;
+            if (carrier != null) root.transform.SetParent(carrier, true);
+            foreach (Renderer r in parts)
+            {
+                var copy = new GameObject(r.name);
+                copy.transform.SetParent(root.transform, true);
+                Mesh mesh;
+                if (r is SkinnedMeshRenderer skin)
+                {
+                    mesh = new Mesh { name = skin.sharedMesh != null ? skin.sharedMesh.name + " (figé)" : "Figé" };
+                    skin.BakeMesh(mesh, true);
+                    created.Add(mesh);
+                    copy.transform.SetPositionAndRotation(skin.transform.position, skin.transform.rotation);
+                }
+                else
+                {
+                    mesh = r.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
+                    copy.transform.SetPositionAndRotation(r.transform.position, r.transform.rotation);
+                    copy.transform.localScale = r.transform.lossyScale;
+                }
+                if (mesh == null) continue;
+                copy.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = copy.AddComponent<MeshRenderer>();
+                renderer.sharedMaterials = r.sharedMaterials;
+                r.GetPropertyBlock(block);
+                block.SetFloat(FlashId, 0f);
+                renderer.SetPropertyBlock(block);
+            }
+            return root;
+        }
+
+        // Boîte de collision autour de tous les rendus de l'objet (racine sans rotation au moment de la création)
+        private static void FitCollider(GameObject piece)
+        {
+            Bounds bounds = default;
+            bool any = false;
+            foreach (Renderer r in piece.GetComponentsInChildren<Renderer>())
+            {
+                if (!any) bounds = r.bounds;
+                else bounds.Encapsulate(r.bounds);
+                any = true;
+            }
+            if (!any) return;
+            if (!piece.TryGetComponent(out BoxCollider box))
+            {
+                box = piece.AddComponent<BoxCollider>();
+                if (debrisMaterial == null)
+                {
+                    debrisMaterial = new PhysicsMaterial("Membre arraché")
+                    {
+                        dynamicFriction = 0.8f, staticFriction = 0.9f, bounciness = 0.12f,
+                        frictionCombine = PhysicsMaterialCombine.Maximum,
+                    };
+                }
+                box.sharedMaterial = debrisMaterial;
+            }
+            box.center = piece.transform.InverseTransformPoint(bounds.center);
+            // Un peu plus petite que le membre : il se pose sur sa chair, pas sur une boîte qui flotte
+            Vector3 size = bounds.size * 0.8f;
+            box.size = new Vector3(Mathf.Max(0.05f, size.x), Mathf.Max(0.05f, size.y), Mathf.Max(0.05f, size.z));
+        }
+
+        // Membre touché : flash blanc et plaie au point d'impact
+        private void HandleLimbDamaged(Limb limb)
+        {
+            LimbView view = ViewOf(limb);
+            if (view == null || limb.IsTorn) return;
+            view.hitFlash = 1f;
+            AddWound(view, body.LastHitPoint);
+        }
+
+        // Plaie sur le rendu du membre le plus proche du point d'impact, posée sur le sommet le plus proche
+        // (position de repos du maillage, comme l'UV3 lue par le shader : la plaie reste collée à la peau).
+        // Sans point d'impact : un sommet au hasard.
+        private static void AddWound(LimbView view, Vector3? hitPoint)
+        {
+            if (view.renderers == null || view.renderers.Length == 0) return;
+            EnsureWounds(view);
+            int bestRenderer = -1;
+            Vector3 bestPoint = Vector3.zero;
+            float bestDist = float.MaxValue;
+            for (int i = 0; i < view.renderers.Length; i++)
+            {
+                Renderer r = view.renderers[i];
+                Vector3[] verts = RestVerticesOf(r);
+                if (verts == null || verts.Length == 0) continue;
+                if (!hitPoint.HasValue)
+                {
+                    if (bestRenderer >= 0 && Random.value < 0.5f) continue;
+                    bestRenderer = i;
+                    bestPoint = verts[Random.Range(0, verts.Length)];
+                    continue;
+                }
+                Vector3 local = RestPoint(r, hitPoint.Value);
+                for (int v = 0; v < verts.Length; v++)
+                {
+                    float d = (verts[v] - local).sqrMagnitude;
+                    if (d >= bestDist) continue;
+                    bestDist = d;
+                    bestRenderer = i;
+                    bestPoint = verts[v];
+                }
+            }
+            if (bestRenderer < 0) return;
+            view.wounds[bestRenderer][view.woundNext % MaxWounds] = new Vector4(bestPoint.x, bestPoint.y, bestPoint.z, Random.Range(0.5f, 10f));
+            view.woundNext++;
+        }
+
+        private static void EnsureWounds(LimbView view)
+        {
+            if (view.wounds != null && view.wounds.Length == view.renderers.Length) return;
+            view.wounds = new Vector4[view.renderers.Length][];
+            for (int i = 0; i < view.wounds.Length; i++) view.wounds[i] = new Vector4[MaxWounds];
+        }
+
+        // Point du monde → repère de repos du maillage du rendu. Maillage déformé par des os : par l'os le plus proche
+        // (repos = bindpose⁻¹ · os⁻¹ · point) ; sinon le repère du rendu.
+        private static Vector3 RestPoint(Renderer r, Vector3 world)
+        {
+            if (r is SkinnedMeshRenderer skin && skin.sharedMesh != null && skin.bones.Length > 0
+                && skin.sharedMesh.bindposes.Length == skin.bones.Length)
+            {
+                int best = -1;
+                float bestDist = float.MaxValue;
+                for (int b = 0; b < skin.bones.Length; b++)
+                {
+                    if (skin.bones[b] == null) continue;
+                    float d = (skin.bones[b].position - world).sqrMagnitude;
+                    if (d >= bestDist) continue;
+                    bestDist = d;
+                    best = b;
+                }
+                if (best >= 0)
+                {
+                    Vector3 inBone = skin.bones[best].worldToLocalMatrix.MultiplyPoint3x4(world);
+                    return skin.sharedMesh.bindposes[best].inverse.MultiplyPoint3x4(inBone);
+                }
+            }
+            return r.transform.worldToLocalMatrix.MultiplyPoint3x4(world);
+        }
+
+        private static Vector3[] RestVerticesOf(Renderer r)
+        {
+            Mesh mesh = r is SkinnedMeshRenderer skin ? skin.sharedMesh
+                      : r.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
+            if (mesh == null || !mesh.isReadable) return null;
+            if (!restVertices.TryGetValue(mesh, out Vector3[] verts) || verts.Length != mesh.vertexCount)
+            {
+                verts = mesh.vertices;
+                restVertices[mesh] = verts;
+            }
+            return verts;
         }
 
         private void HandleParry()
@@ -379,19 +654,15 @@ namespace ParryEverything.Player
                 if (view.root.gameObject.activeSelf != show) view.root.gameObject.SetActive(show);
                 if (!show) continue;
 
-                float ratio = limb.LifeRatio;
-                float shake = ratio < shakeBelow
-                    ? (Mathf.PerlinNoise(Time.time * 25f, view.phaseOffset * 10f) - 0.5f) * (1f - ratio / shakeBelow)
-                    : 0f;
                 ApplyLook(limb, view, dt);
 
                 switch (limb.Kind)
                 {
-                    case LimbKind.Flesh: PlaceFlesh(view, facing, hop, shake); break;
-                    case LimbKind.Leg: PlaceLeg(limb, view, facing, grounded, vel, shake, dt); break;
-                    case LimbKind.Head: PlaceHead(view, shake); break;
-                    case LimbKind.Arm: PlaceArm(view, grounded, shake, dt); break;
-                    case LimbKind.Tail: PlaceTail(view, shake, vel, dt); break;
+                    case LimbKind.Flesh: PlaceFlesh(view, facing, hop); break;
+                    case LimbKind.Leg: PlaceLeg(limb, view, facing, grounded, vel, dt); break;
+                    case LimbKind.Head: PlaceHead(view); break;
+                    case LimbKind.Arm: PlaceArm(view, grounded, dt); break;
+                    case LimbKind.Tail: PlaceTail(view, vel, dt); break;
                 }
             }
         }
@@ -413,12 +684,32 @@ namespace ParryEverything.Player
             fill.transform.position = transform.position + fillOffset;
         }
 
-        // Apparence selon l'état du membre : fourrure → chair cousue → à vif, effets, flash de parade
+        // Apparence selon l'état du membre (fondue lentement) : fourrure → chair cousue, usure, plaies,
+        // coutures qui lâchent (shader FleshCore) ; effets ; flash de parade ou du coup
         private void ApplyLook(Limb limb, LimbView view, float dt)
         {
             float ratio = limb.LifeRatio;
-            float fur = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(furGoneBelow, furFullAbove, ratio));
-            float damage = Mathf.SmoothStep(0f, 1f, 1f - ratio);
+            float furGoal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(furGoneBelow, furFullAbove, ratio));
+            float damageGoal = Mathf.SmoothStep(0f, 1f, 1f - ratio);
+            // Fondu lent vers le nouvel état (≈ 95 % atteint en lookFadeTime) ; d'emblée au premier affichage
+            if (view.shownDamage < 0f)
+            {
+                view.shownFur = furGoal;
+                view.shownDamage = damageGoal;
+            }
+            float fade = 1f - Mathf.Exp(-3f * dt / Mathf.Max(0.01f, lookFadeTime));
+            view.shownFur = Mathf.Lerp(view.shownFur, furGoal, fade);
+            view.shownDamage = Mathf.Lerp(view.shownDamage, damageGoal, fade);
+            float fur = view.shownFur;
+            float damage = view.shownDamage;
+            view.hitFlash = Mathf.MoveTowards(view.hitFlash, 0f, Time.unscaledDeltaTime / Mathf.Max(0.01f, hitFlashTime));
+            // Membre soigné : ses plaies se referment
+            if (ratio >= 0.999f && view.woundNext > 0)
+            {
+                view.wounds = null;
+                view.woundNext = 0;
+            }
+            EnsureWounds(view);
             LimbEffect effect = limb.Effect;
             float bleed = effect == LimbEffect.Bleeding ? 1f : 0f;
             float infection = effect == LimbEffect.Infection ? Mathf.Lerp(infectionMin, 1f, 1f - ratio) : 0f;
@@ -427,15 +718,17 @@ namespace ParryEverything.Player
             float swellGoal = effect == LimbEffect.Hypertrophy ? hypertrophyScale + Mathf.Sin(Time.time * 2.5f) * 0.03f : 1f;
             view.swell = Mathf.Lerp(view.swell, swellGoal, 1f - Mathf.Exp(-4f * dt));
 
-            foreach (Renderer r in view.renderers)
+            for (int i = 0; i < view.renderers.Length; i++)
             {
+                Renderer r = view.renderers[i];
                 if (r == null) continue;
                 r.GetPropertyBlock(block);
                 block.SetFloat(FurId, fur);
                 block.SetFloat(DamageId, damage);
                 block.SetFloat(BleedId, bleed);
                 block.SetFloat(InfectionId, infection);
-                block.SetFloat(FlashId, flash);
+                block.SetFloat(FlashId, Mathf.Max(flash, view.hitFlash));
+                block.SetVectorArray(WoundsId, view.wounds[i]);
                 r.SetPropertyBlock(block);
             }
 
@@ -456,9 +749,9 @@ namespace ParryEverything.Player
             }
         }
 
-        private void PlaceFlesh(LimbView view, float facing, float hop, float shake)
+        private void PlaceFlesh(LimbView view, float facing, float hop)
         {
-            view.root.position = transform.position + new Vector3(shake * 0.05f, hop, 0f);
+            view.root.position = transform.position + new Vector3(0f, hop, 0f);
 
             // Au sol elle roule ; debout, les pattes la soulèvent et elle suit chaque pas
             float s = Mathf.SmoothStep(0f, 1f, standUp);
@@ -476,7 +769,7 @@ namespace ParryEverything.Player
             torsoTilt = Mathf.Lerp(tilt, Mathf.DeltaAngle(0f, roll) * facing, crawlWeight * (1f - s));
             view.ball.localRotation = Quaternion.Euler(0f, 0f, roll)
                                       * Quaternion.Euler(0f, turnYaw, 0f)
-                                      * Quaternion.Euler(0f, 0f, tilt + shake * 10f);
+                                      * Quaternion.Euler(0f, 0f, tilt);
             // Écrasée quand un pied se pose, étirée quand le corps remonte
             float k = Mathf.Clamp(bodyDrop * squash * s, -0.25f, 0.25f);
             view.ball.localScale = new Vector3(1f - k * 0.6f, 1f + k, 1f - k * 0.6f) * view.swell;
@@ -485,17 +778,17 @@ namespace ParryEverything.Player
         // ---------- Tête, bras, queue (dans le repère du torse, chat qui regarde à droite) ----------
 
         // Tête : compense l'inclinaison du torse, hoche aux impacts et au rythme des pas
-        private void PlaceHead(LimbView view, float shake)
+        private void PlaceHead(LimbView view)
         {
             CatTorsoRig rig = TorsoRig;
             if (rig != null) view.root.localPosition = rig.Neck;
             float nod = bodyDrop * headNod + Mathf.Sin(gaitPhase * Mathf.PI * 4f) * headBob * walkWeight;
-            view.root.localRotation = Quaternion.Euler(0f, 0f, -TiltOffRest * headLevel + nod + shake * 15f) * view.restRoot;
+            view.root.localRotation = Quaternion.Euler(0f, 0f, -TiltOffRest * headLevel + nod) * view.restRoot;
             view.root.localScale = Vector3.one * view.swell;
         }
 
         // Bras : pendants, balancent à l'opposé des pattes ; levés devant pour parer, levés en l'air
-        private void PlaceArm(LimbView view, bool grounded, float shake, float dt)
+        private void PlaceArm(LimbView view, bool grounded, float dt)
         {
             CatTorsoRig rig = TorsoRig;
             if (rig != null)
@@ -545,7 +838,7 @@ namespace ParryEverything.Player
             view.armAngle = Mathf.Lerp(groundArm, poseArm, view.armPose);
             view.elbowAngle = Mathf.Lerp(groundElbow, poseElbow, view.armPose);
 
-            view.root.localRotation = Quaternion.Euler(0f, 0f, view.armAngle + shake * 20f) * view.restRoot;
+            view.root.localRotation = Quaternion.Euler(0f, 0f, view.armAngle) * view.restRoot;
             if (view.elbow != null) view.elbow.localRotation = Quaternion.Euler(0f, 0f, view.elbowAngle) * view.restElbow;
             // Côté loin : forme retournée en profondeur (vrai miroir du bras côté caméra)
             view.root.localScale = new Vector3(1f, 1f, view.side > 0 ? -1f : 1f) * view.swell;
@@ -580,53 +873,17 @@ namespace ParryEverything.Player
             view.trail = Mathf.Clamp(view.trail + view.trailVel * dtc, -30f, maxArmTrail);
         }
 
-        // Gestes de la queue au repos. Courbures en degrés pour toute la longueur de la queue.
-        // Signes : « lift » > 0 lève la base, « hook » > 0 enroule le bout vers l'avant (crochet du point d'interrogation).
-        private struct TailGesture
-        {
-            public float lift;        // base levée (degrés)
-            public float hook;        // crochet du bout (degrés de courbure sur le dernier tiers)
-            public float hookSway;    // le crochet bascule lentement d'un côté à l'autre (amplitude, degrés)
-            public float wave;        // vague de courbure qui descend vers le bout (degrés sur la longueur)
-            public float waves;       // nombre de vagues le long de la queue
-
-            public static TailGesture Lerp(TailGesture a, TailGesture b, float t)
-            {
-                return new TailGesture
-                {
-                    lift = Mathf.Lerp(a.lift, b.lift, t),
-                    hook = Mathf.Lerp(a.hook, b.hook, t),
-                    hookSway = Mathf.Lerp(a.hookSway, b.hookSway, t),
-                    wave = Mathf.Lerp(a.wave, b.wave, t),
-                    waves = Mathf.Lerp(a.waves, b.waves, t),
-                };
-            }
-        }
-
-        private static readonly TailGesture[] TailGestures =
-        {
-            // Point d'interrogation : base levée, bout en crochet qui bascule doucement
-            new TailGesture { lift = 10f, hook = 95f, hookSway = 30f, wave = 45f, waves = 0.8f },
-            // Balayage lent et ample : une grande vague la parcourt
-            new TailGesture { lift = -3f, hook = 30f, hookSway = 12f, wave = 180f, waves = 0.9f },
-            // Pause attentive : presque immobile, la queue repose dans sa courbe
-            new TailGesture { lift = 4f, hook = 50f, hookSway = 6f, wave = 14f, waves = 1.2f },
-            // Crochet qui bascule : le bout passe lentement d'un côté à l'autre
-            new TailGesture { lift = 2f, hook = 20f, hookSway = 80f, wave = 30f, waves = 0.7f },
-        };
-
-        // Queue : courbe de repos du fichier + gestes au repos + vent du mouvement.
-        // Chaque os k a un décalage « absolu » (par rapport à sa direction de repos, repère du torse) :
-        //  - cible = somme des plis des os 0..k (gestes, courbure intégrée le long de la queue : courbe lisse)
-        //            + vent : la part couchée croît avec v², plus forte vers le bout ;
-        //  - ressort vers cette cible, de plus en plus mou vers le bout : les gestes partent de la base et arrivent au
-        //    bout en retard ; la queue fouette aux arrêts, demi-tours, sauts, atterrissages ;
-        //  - par-dessus, directement : claquement et rafales de la course.
+        // Queue : courbe de repos du fichier + ondulation au repos + vent du mouvement.
+        // Ondulation au repos : chaque os se plie de sin(ωt − k·déphasage) × amplitude × r^1,1 × (1 + 2r²)
+        // (r = place de l'os, 0 base → 1 bout) ; les plis s'enchaînent d'os en os : une vague continue part de la base,
+        // presque immobile, et s'amplifie vers le bout. Appliquée directement (pas de ressort) : mouvement net et fluide.
+        // Vent : chaque os a un décalage « absolu » (par rapport à sa direction de repos, repère du torse) qui suit, par
+        // un ressort de plus en plus mou vers le bout, la direction du vent (part couchée croissante avec v²) ;
+        // la queue fouette aux arrêts, demi-tours, sauts, atterrissages. Par-dessus : claquement et rafales de la course.
         // Rotation locale d'un os = son décalage moins celui de l'os précédent (les rotations s'enchaînent).
-        // Une rotation Z positive tourne l'os dans le sens trigonométrique (repère « regarde à droite ») ; la queue
-        // pointe vers l'arrière, donc une rotation négative la lève / l'enroule vers l'avant.
-        // La rotation Y la balance vers la caméra ou loin d'elle.
-        private void PlaceTail(LimbView view, float shake, Vector3 vel, float dt)
+        // Une rotation Z positive tourne l'os dans le sens trigonométrique (repère « regarde à droite ») ;
+        // la rotation Y la balance vers la caméra ou loin d'elle.
+        private void PlaceTail(LimbView view, Vector3 vel, float dt)
         {
             CatTorsoRig rig = TorsoRig;
             if (rig != null) view.root.localPosition = rig.TailBase;
@@ -647,88 +904,52 @@ namespace ParryEverything.Player
             view.tailPhase += dt * (tailWaveSpeed + tailFlutterSpeed * full);
             float dtc = Mathf.Min(dt, 0.05f);
 
-            // Repos : geste en cours (fondu vers le suivant), s'efface quand le vent prend le relais
+            // Ondulation au repos (s'efface quand le vent prend le relais). Réglages donnés pour 25 os,
+            // remis à l'échelle du nombre d'os réel : même forme quelle que soit la chaîne.
             float idle = (1f - full) * tailIdle;
-            TailGesture g = UpdateTailGesture(view, dt);
-            view.tailIdleClock += dt * tailIdleTempo;
+            view.tailIdleClock += dt * tailIdleSpeed;
             float clock = view.tailIdleClock;
             float time = Time.time;
-            float hook = g.hook + g.hookSway * Mathf.Sin(clock * 0.75f + 0.8f) + g.hookSway * 0.3f * Mathf.Sin(clock * 1.9f);
-            float lift = g.lift + tailBreath * Mathf.Sin(time * 2.2f);   // même rythme que la respiration du corps
-            float wavePhase = clock * 1.75f;                                // ≈ 3,6 s par vague
-            float ds = 1f / n;
+            float perBone = 25f / n;
+            float amplitude = tailIdleAmplitude * perBone;
+            float phaseStep = tailIdlePhaseStep * perBone;
+            float breath = tailBreath * Mathf.Sin(time * 2.2f);   // même rythme que la respiration du corps
 
-            float fold = 0f;                 // courbure intégrée : décalage d'idle de l'os k
+            float wave = 0f;                 // somme des plis de l'ondulation : décalage de l'os k
             float previous = 0f, previousDepth = 0f;
-            float shakePerBone = shake * 70f / n;
             for (int k = 0; k < n; k++)
             {
-                float s = (k + 0.5f) / n;    // place de l'os le long de la queue (0 base, 1 bout)
-                float tip = TipCurve(s);     // courbure du dernier tiers (intégrale 1 sur la queue)
+                float r = k / (float)n;      // place de l'os le long de la queue (0 base, 1 bout)
+                float fold = Mathf.Sin(clock - k * phaseStep) * amplitude * Mathf.Pow(r, 1.1f) * (1f + r * r * 2f);
+                wave += fold * idle + (k == 0 ? -breath * idle : 0f);
 
-                // Pli de l'os k (degrés) : base levée, crochet du bout, vague qui descend vers le bout
-                float bendHere = (k == 0 ? -lift : 0f)
-                                 - hook * tip * ds
-                                 + g.wave * Mathf.Sin(wavePhase - Mathf.PI * 2f * g.waves * s) * Mathf.Lerp(0.35f, 1f, s) * ds;
-                fold += bendHere * idle;
-
-                // Vent : la queue se couche dans son sens (le bout plus que la base)
-                float windGoal = speed > 0.01f
+                // Vent : la queue se couche dans son sens (le bout plus que la base), ressort plus mou vers le bout
+                float s = (k + 0.5f) / n;
+                float goal = speed > 0.01f
                     ? stream * Mathf.Lerp(0.6f, 1f, s) * Mathf.DeltaAngle(view.tailRestAngle[k], windAngle)
                     : 0f;
-                float goal = Mathf.Clamp(fold + windGoal, -tailMaxBend, tailMaxBend);
-
-                // Ressort de plus en plus mou vers le bout (retard, léger dépassement)
+                goal = Mathf.Clamp(goal, -tailMaxBend, tailMaxBend);
                 float stiff = tailStiffness * Mathf.Lerp(1f, tailTipSoftness, s);
                 float damp = tailDamping * Mathf.Sqrt(stiff / Mathf.Max(0.01f, tailStiffness));
                 view.tailBendVel[k] += (stiff * (goal - view.tailBend[k]) - damp * view.tailBendVel[k]) * dtc;
                 view.tailBend[k] = Mathf.Clamp(view.tailBend[k] + view.tailBendVel[k] * dtc, -tailMaxBend, tailMaxBend);
 
-                // Directement : claquement et rafales de la course
+                // Course : claquement et rafales
                 float flutter = Mathf.Sin(view.tailPhase - Mathf.PI * 2f * 1.2f * s) * tailFlutter * full * s;
                 float gust = (Mathf.PerlinNoise(time * 3f, view.phaseOffset * 5f + s * 2.5f) - 0.5f) * 2f * tailGust * full * s;
-                float bend = view.tailBend[k] + flutter + gust;
+                float bend = view.tailBend[k] + wave + flutter + gust;
 
                 // Profondeur : lent balancement vers la caméra et loin d'elle
-                float depth = tailDepth * s * Mathf.Sin(clock * 1.3f + 0.7f - Mathf.PI * 1.2f * s) * idle;
+                float depth = tailDepth * s * Mathf.Sin(clock * 0.37f + 0.7f - Mathf.PI * 1.2f * s) * idle;
 
                 // La base compense la moitié du basculement du torse
-                float angle = bend - previous + (k == 0 ? -TiltOffRest * 0.5f : 0f) + shakePerBone;
+                float angle = bend - previous + (k == 0 ? -TiltOffRest * 0.5f : 0f);
                 float yaw = depth - previousDepth;
                 previous = bend;
                 previousDepth = depth;
                 Quaternion rest = view.restTail != null && k < view.restTail.Length ? view.restTail[k] : Quaternion.identity;
                 view.tailJoints[k].localRotation = Quaternion.Euler(0f, yaw, angle) * rest;
             }
-        }
-
-        // Répartition du crochet sur la queue : en cloche sur les 60 % du bout (nulle avant, maximale vers 70 %,
-        // le tout dernier bout presque droit) : le crochet s'arrondit au lieu de casser. Intégrale ≈ 1 sur [0, 1].
-        private static float TipCurve(float s)
-        {
-            const float from = 0.4f;
-            if (s <= from) return 0f;
-            float x = (s - from) / (1f - from);
-            float bell = Mathf.Sin(Mathf.PI * Mathf.Pow(x, 0.8f));
-            return bell * bell / (0.5f * (1f - from));
-        }
-
-        // Geste en cours, fondu (ease-in/ease-out) vers le suivant ; un nouveau geste est tiré quand le temps est écoulé
-        private TailGesture UpdateTailGesture(LimbView view, float dt)
-        {
-            view.tailGestureTimer -= dt;
-            if (view.tailGestureBlend >= 1f && view.tailGestureTimer <= 0f)
-            {
-                view.tailGesture = view.tailNextGesture;
-                int next = UnityEngine.Random.Range(0, TailGestures.Length - 1);
-                view.tailNextGesture = next >= view.tailGesture ? next + 1 : next;   // jamais deux fois le même
-                view.tailGestureBlend = 0f;
-                view.tailGestureTimer = UnityEngine.Random.Range(tailGestureMin, Mathf.Max(tailGestureMin, tailGestureMax));
-            }
-            if (view.tailGestureBlend < 1f) view.tailGestureBlend = Mathf.Min(1f, view.tailGestureBlend + dt / Mathf.Max(0.05f, tailGestureBlend));
-            float t = view.tailGestureBlend;
-            float ease = t * t * t * (t * (t * 6f - 15f) + 10f);   // départ et arrivée tout en douceur
-            return TailGesture.Lerp(TailGestures[view.tailGesture], TailGestures[view.tailNextGesture], ease);
         }
 
         // Direction de repos de chaque os (degrés, repère du torse ; os orienté vers −X dans son repère)
@@ -738,9 +959,6 @@ namespace ParryEverything.Player
             view.tailBend = new float[n];
             view.tailBendVel = new float[n];
             view.tailRestAngle = new float[n];
-            view.tailGesture = view.tailNextGesture = UnityEngine.Random.Range(0, TailGestures.Length);
-            view.tailGestureBlend = 1f;
-            view.tailGestureTimer = UnityEngine.Random.Range(tailGestureMin, Mathf.Max(tailGestureMin, tailGestureMax));
             view.tailIdleClock = UnityEngine.Random.Range(0f, 20f);
             Quaternion chain = view.root.localRotation;
             for (int i = 0; i < n; i++)
@@ -964,7 +1182,7 @@ namespace ParryEverything.Player
             return hip;
         }
 
-        private void PlaceLeg(Limb limb, LimbView view, float facing, bool grounded, Vector3 vel, float shake, float dt)
+        private void PlaceLeg(Limb limb, LimbView view, float facing, bool grounded, Vector3 vel, float dt)
         {
             float s = Mathf.SmoothStep(0f, 1f, standUp);
             Vector3 hip = HipPosition(limb, facing, s);
@@ -980,7 +1198,6 @@ namespace ParryEverything.Player
             float splayAngle = LegRig != null ? LegRig.Splay : 10f;
             Vector2 target = new Vector2((view.foot.x - hip.x) * facing,
                                          (view.foot.y - hip.y) / Mathf.Max(0.2f, Mathf.Cos(splayAngle * Mathf.Deg2Rad)));
-            target.x += shake * 0.1f;
             SolveLeg(target, out float thighAngle, out float shinAngle);
 
             Vector2 thigh = ThighVector, shin = ShinVector;

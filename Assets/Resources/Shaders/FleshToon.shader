@@ -67,7 +67,7 @@ Shader "Custom/FleshToon"
         {
             float4 color : COLOR;
             float4 furData;
-            float2 vein;     // x : veines, y : bourrelet des sutures
+            float4 restVein;   // xyz : position de repos (UV3), w : veines
             float3 viewDir;
         };
 
@@ -86,12 +86,12 @@ Shader "Custom/FleshToon"
         {
             UNITY_INITIALIZE_OUTPUT(Input, o);
             o.furData = v.texcoord1;
-            o.vein = v.texcoord2.xy;
+            o.restVein = float4(v.texcoord3.xyz, v.texcoord2.x);
         }
 
         void surf (Input IN, inout SurfaceOutput o)
         {
-            FleshLook look = ComputeFlesh(IN.color, IN.furData, IN.vein);
+            FleshLook look = ComputeFlesh(IN.color, IN.furData, IN.restVein);
             half rim = pow(1.0 - saturate(dot(normalize(IN.viewDir), o.Normal)), _RimPower);
             o.Albedo = look.albedo;
             o.Emission = look.emission + _RimColor.rgb * step(0.35, rim) * 0.35;

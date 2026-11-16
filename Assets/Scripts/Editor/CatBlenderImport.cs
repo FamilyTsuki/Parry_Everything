@@ -25,6 +25,7 @@ namespace ParryEverything.Editor
             meshes = null;
             rig = null;
             if (s.source != CatModelSettings.Source.Blender || s.blenderModel == null) return false;
+            EnsureReadable(s.blenderModel);
 
             // Les copies du côté loin (Far_…) ne servent qu'à l'aperçu dans Blender : le jeu recopie le côté caméra
             var nodes = new Dictionary<string, Transform>();
@@ -239,6 +240,17 @@ namespace ParryEverything.Editor
                 meshes.Add(segMesh);
             }
             return true;
+        }
+
+        // Les maillages du fichier doivent être lisibles (Read/Write) : sinon Unity refuse d'en lire les sommets et
+        // rien n'est reconstruit. Réglage d'import corrigé et fichier réimporté si besoin.
+        private static void EnsureReadable(GameObject model)
+        {
+            string path = UnityEditor.AssetDatabase.GetAssetPath(model);
+            if (!(UnityEditor.AssetImporter.GetAtPath(path) is UnityEditor.ModelImporter importer) || importer.isReadable) return;
+            importer.isReadable = true;
+            importer.SaveAndReimport();
+            Debug.Log("Chat Blender : lecture des maillages (Read/Write) activée à l'import de " + path + ".");
         }
 
         // Repère d'une pièce dans le fichier : position et rotation (sans l'échelle : Blender exporte en cm)

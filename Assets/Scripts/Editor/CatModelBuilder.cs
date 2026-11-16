@@ -159,6 +159,12 @@ namespace ParryEverything.Editor
             {
                 foreach (Mesh mesh in built) FlattenFaces(mesh);
             }
+            // UV3 = position de repos de chaque sommet (repère du maillage, avant déformation par les os) :
+            // fissures et plaies y sont calculées, elles restent collées à la peau quand le membre se plie
+            foreach (Mesh mesh in built)
+            {
+                if (mesh.vertexCount > 0) mesh.SetUVs(3, mesh.vertices);
+            }
             Dictionary<string, Mesh> m = SaveMeshes(built);
 
             // Torse : 3 parties (Chest, Belly, Pelvis), points d'attache de la tête, des bras et de la queue
@@ -1377,7 +1383,7 @@ namespace ParryEverything.Editor
             if (source.tangents.Length > 0) target.SetTangents(source.tangents);
             if (source.colors.Length > 0) target.SetColors(source.colors);
             var uv = new List<Vector4>();
-            for (int channel = 0; channel < 3; channel++)
+            for (int channel = 0; channel < 4; channel++)
             {
                 source.GetUVs(channel, uv);
                 if (uv.Count > 0) target.SetUVs(channel, uv);
