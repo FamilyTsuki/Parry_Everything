@@ -2852,8 +2852,10 @@ GameObject:
   m_Component:
   - component: {fileID: 1190261224}
   - component: {fileID: 1190261223}
-  - component: {fileID: 1190261226}
   - component: {fileID: 1190261225}
+  - component: {fileID: 1190261228}
+  - component: {fileID: 1190261227}
+  - component: {fileID: 1190261226}
   m_Layer: 0
   m_Name: GameFlow
   m_TagString: Untagged
@@ -2874,8 +2876,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: ParryEverything::ParryEverything.Core.GameFlow
   startInMenu: 1
-  respawnDelay: 1.5
+  introFade: 1.5
+  deathSlowMotion: 0.25
+  deathHold: 2.2
+  deathSkipAfter: 0.5
+  deathFadeOut: 0.9
+  deathEmberColor: {r: 0.55, g: 0.75, b: 1, a: 1}
   killHeight: -40
+  wakeFadeIn: 1.4
+  wakeDuration: 1.6
+  wakeColor: {r: 0.45, g: 0.75, b: 1, a: 1}
+  transitionFade: 0.7
 --- !u!4 &1190261224
 Transform:
   m_ObjectHideFlags: 0
@@ -2916,12 +2927,53 @@ MonoBehaviour:
   m_GameObject: {fileID: 1190261222}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9a505953b08bf1c3ab82b8fc4a893c3f, type: 3}
+  m_Script: {fileID: 11500000, guid: 0f4be7e6af098aa598e6a6a032da62e8, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: ParryEverything::ParryEverything.Core.GameMenus
+  m_EditorClassIdentifier: ParryEverything::ParryEverything.UI.GameScreens
   gameTitle: PARRY EVERYTHING
-  menuDim: 0.75
-  pauseDim: 0.55
+  deathWord: "CONSUM\xC9"
+  deathWordDelay: 0.25
+  deathWordFade: 0.9
+  deathHintDelay: 0.8
+  saveIndicatorTime: 2
+  cancelGrace: 0.2
+  titleShadeStrength: 0.85
+--- !u!114 &1190261227
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1190261222}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 962c72c5e2c8a937990b85368c3a0312, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: ParryEverything::ParryEverything.UI.UiSounds
+  volume: 0.35
+--- !u!114 &1190261228
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1190261222}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
+  m_PanelSettings: {fileID: 11400000, guid: 2400c2f57a32d41109e64c74a892070a, type: 2}
+  m_ParentUI: {fileID: 0}
+  sourceAsset: {fileID: 9197481963319205126, guid: 09348d6541046c976af71e608ee27610, type: 3}
+  m_SortingOrder: 0
+  m_Position: 0
+  m_WorldSpaceSizeMode: 1
+  m_WorldSpaceWidth: 1920
+  m_WorldSpaceHeight: 1080
+  m_PivotReferenceSize: 0
+  m_Pivot: 0
+  m_WorldSpaceCollider: {fileID: 0}
 --- !u!1 &1222069220
 GameObject:
   m_ObjectHideFlags: 0
@@ -3109,6 +3161,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: ParryEverything::ParryEverything.Environment.Sanctuary
   sanctuaryId: zone1-gardien
+  placeName: Sanctuaire du Gardien
   spawnOffset: {x: 0, y: 0, z: 0}
   flame: {fileID: 1396132760}
   flareBoost: 2.5
@@ -3299,6 +3352,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   target: {fileID: 1834448050}
+  titleOffset: {x: -2.6, y: 1.1, z: -1.2}
+  titleDrift: {x: 0.5, y: 0.25}
+  titleDriftSpeed: 0.08
+  titleBlendTime: 2
 --- !u!114 &1289207565
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3324,6 +3381,8 @@ MonoBehaviour:
   dreadAberration: 1.6
   dreadWobble: 0.8
   dreadGrain: 0.05
+  dangerPulseSpeed: 5
+  dangerPulseDepth: 0.3
 --- !u!114 &1289207566
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4630,6 +4689,7 @@ GameObject:
   - component: {fileID: 1834448053}
   - component: {fileID: 1834448054}
   - component: {fileID: 1834448055}
+  - component: {fileID: 1834448056}
   m_Layer: 0
   m_Name: player
   m_TagString: Untagged
@@ -4936,6 +4996,15 @@ MonoBehaviour:
   hopTilt: 12
   hopImpact: 0.6
   hopTuck: 0.12
+  crawlStride: 0.45
+  crawlReach: 0.5
+  crawlHandFront: 0.75
+  crawlHandLift: 0.1
+  crawlRestHand: 0.45
+  crawlChestLift: 0.18
+  crawlWave: 5
+  wormWave: 14
+  wormLift: 0.05
   stepRise: 0.11
   landImpact: 0.9
   bodySpringStiffness: 140
@@ -4962,15 +5031,30 @@ MonoBehaviour:
   parryArmAngle: 95
   airArmAngle: 55
   armSharpness: 14
-  tailWave: 8
+  tailIdle: 1
+  tailIdleAmplitude: 11
+  tailIdlePhaseStep: 0.22
+  tailIdleSpeed: 3.5
+  tailBreath: 3
+  tailDepth: 7
   tailWaveSpeed: 2.6
-  tailDrag: 3
+  tailWind: 0.12
+  tailMaxStream: 0.95
+  tailMaxBend: 110
+  tailFullSpeed: 6
+  tailFlutter: 16
+  tailFlutterSpeed: 16
+  tailGust: 10
+  tailStiffness: 70
+  tailDamping: 9
+  tailTipSoftness: 0.3
+  lookFadeTime: 1.5
+  hitFlashTime: 0.12
   furFullAbove: 0.85
   furGoneBelow: 0.15
   hypertrophyScale: 1.25
   bleedDripInterval: 0.3
   infectionMin: 0.35
-  shakeBelow: 0.35
   parryFlashTime: 0.1
   fillColor: {r: 0.75, g: 0.68, b: 0.85, a: 1}
   fillIntensity: 1.6
@@ -4996,6 +5080,25 @@ MonoBehaviour:
   tornColor: {r: 0.25, g: 0.25, b: 0.3, a: 0.45}
   outlineColor: {r: 0.03, g: 0.03, b: 0.06, a: 0.85}
   hitFlashTime: 0.35
+--- !u!114 &1834448056
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1834448045}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93b034567bf695db0b654a56530dc7a9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: ParryEverything::ParryEverything.Player.DangerFeedback
+  startRatio: 0.5
+  fullRatio: 0.15
+  response: 3
+  heartMinThreshold: 0.25
+  heartRateCalm: 70
+  heartRatePanic: 150
+  heartVolume: 0.5
 --- !u!1 &2027000101
 GameObject:
   m_ObjectHideFlags: 0

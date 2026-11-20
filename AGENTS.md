@@ -16,10 +16,12 @@ Assets/
     Audio/           BossMusic, AmbientWind (synthèse temps réel)
     Environment/     petits comportements de décor (FloatingBob, CameraParallax)
     Lab/             scène AnimationLab (AnimationLab, LabCamera)
+    UI/              écrans UI Toolkit (GameScreens, OptionRow, UiSounds, SaveLabel)
     Editor/          outils éditeur uniquement (AutoRefreshWatcher, CatModelBuilder + MeshDraft : modèles du chat)
   Materials/         matériaux (.mat), nommés selon leur usage (Environment/ : décor)
   Textures/          textures (Environment/ : particules de neige/brume, dégradé du ciel)
   Meshes/            meshes sauvegardés (Environment/SoulRealmMeshes.asset ; Player/CatModels.asset = corps du chat)
+  UI/                mise en page des écrans : GameScreens.uxml / .uss (éditables à la main), GamePanel.asset (PanelSettings, 1920×1080), GameTheme.tss
   Prefabs/           prefabs (Environment/SoulRealm.prefab = décor complet ; Player/ = FleshBall, FleshBody, CatLeg)
   PhysicsMaterials/  physic materials
   Resources/Shaders/ shaders chargés par Shader.Find (doivent rester dans Resources)
@@ -39,7 +41,9 @@ Assets/
   - `MaterialFactory.Unlit/Lit` au lieu de `new Material(Shader.Find(...))` ;
   - `GeneratedObjects` pour les objets créés en code (HideAndDontSave + destruction groupée) ;
   - `GameCamera.ShakeMain(...)` / `GameCamera.Main` pour la caméra ;
-  - `GuiDraw` pour les HUD OnGUI ;
+  - `GuiDraw` pour les HUD OnGUI (debug, HUD en jeu) ; les menus sont en UI Toolkit (`UI/GameScreens` + `Assets/UI/GameScreens.uxml`) : nouvel écran = un bloc dans l'UXML + sa logique dans GameScreens ;
+  - `ScreenFade.FadeTo(...)` pour les fondus au noir (survit au rechargement de scène) ;
+  - `GameSettings.MusicVolume` / `SfxVolume` pour toute nouvelle source de son (le volume général passe par AudioListener) ;
   - `GameInput.Pressed/Held(GameAction.X)` pour les entrées, jamais `Input.GetKey` (nouvelle touche : l'ajouter dans `GameAction` et `GameInput`) ;
   - `TimeControl.SetEffectScale(...)` pour arrêts du temps et ralentis, jamais `Time.timeScale` directement (sinon la pause casse) ;
   - `GameFlow.IsPlaying` pour savoir si le joueur peut agir ; `GameFlow.Instance.SaveAtSanctuary(...)` / `BossDefeated(...)` pour sauvegarder la progression ;

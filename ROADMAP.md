@@ -34,12 +34,12 @@ Ce dont toutes les phases suivantes ont besoin. Rien de visible pour le joueur, 
 
 | # | Tâche | Statut |
 |---|---|---|
-| 0.1 | **Flux de jeu** (`GameFlow`) : états menu, jeu, pause, mort, fin ; réapparition. | 🔶 codé, testé en EditMode ; à tester en jeu |
-| 0.2 | **Sauvegarde** (`SaveSystem`) : fichier JSON, versionné (pour changer le format sans casser les anciennes sauvegardes). | 🔶 codé, testé en EditMode ; à tester en jeu |
-| 0.3 | **Santé du joueur** (`PlayerBody`) : âme qui se consume et rétrécit ; structure prête pour les membres (vie par membre, emplacement d'effet). | 🔶 âme + structure des membres (`Limb`, `LimbEffect`) codées, testées en EditMode ; à tester en jeu |
+| 0.1 | **Flux de jeu** (`GameFlow`) : états menu, jeu, pause, mort, réveil, fin ; mise en scène de la mort ; fondus (`ScreenFade`) ; rechargement masqué. | 🔶 refait le 2026-11-20 ; à tester en jeu |
+| 0.2 | **Sauvegarde** (`SaveSystem`) : fichier JSON versionné, copie `.bak`, écrite au sanctuaire / boss / recouture, icône. | 🔶 refait le 2026-11-20 ; à tester en jeu |
+| 0.3 | **Santé du joueur** (`PlayerBody`) : âme qui se consume ; membres ; vie basse ressentie (`DangerFeedback`). | 🔶 à tester en jeu |
 | 0.4 | **Entrées** centralisées dans une seule classe (clavier ; manette plus tard sans tout réécrire). | ✅ `GameInput` + `GameAction` |
-| 0.5 | **Menus de base** : titre, pause, écran de fin (OnGUI via `GuiDraw`, provisoire). | 🔶 `GameMenus` codé ; à tester en jeu |
-| 0.6 | **Outils de debug** : touches pour se soigner, changer d'état (âme / corps), sauter au boss, afficher les fenêtres de parade. | 🔶 `DebugTools` (F1 à F5) codé ; à tester en jeu |
+| 0.5 | **Menus** en UI Toolkit (`GameScreens`) : titre sur scène vivante, pause, options (son, affichage), confirmations, mort, fin. | 🔶 refait le 2026-11-20 ; à tester en jeu |
+| 0.6 | **Outils de debug** : F1 à F9 (soin, invincible, boss, panneau, forme, tuer le boss, sauver ici, mourir, effacer la sauvegarde). | 🔶 à tester en jeu |
 | 0.7 | **Contrôle de version** : commits réguliers, une branche par phase. | 🔶 branche `phase-0` ; commits en attente |
 
 **Décisions à prendre avant :** aucune.
@@ -174,6 +174,8 @@ Le moment de vérifier que les deux piliers sont amusants, avant d'investir des 
 ---
 
 ## Journal
+
+- 2026-11-20 — Phase 0 reprise pour la qualité (retour de tsuki : « rien de pro »). Menus OnGUI remplacés par UI Toolkit (`UI/GameScreens`, `Assets/UI/GameScreens.uxml/.uss`, `GamePanel.asset`) : titre sur la scène vivante (caméra de titre dans `GameCamera` : décalage + dérive, glisse vers le jeu en lançant), pause, options (`GameSettings` : volumes général / musique et ambiance / effets, plein écran, résolution, vsync ; PlayerPrefs), confirmations, fin ; navigation clavier + souris, sons synthétisés (`UiSounds`). `GameFlow` refait : fondus (`ScreenFade`, statique, l'écran reste noir pendant le chargement asynchrone), mort en mise en scène (ralenti, braises, mot « CONSUMÉ » qui se dissout, passable), état `Waking` (réveil au sanctuaire, lueur). Sauvegarde : copie `.bak` relue si la sauvegarde est abîmée, nom du lieu (`placeName`) affiché sur Continuer, écrite aussi à la recouture, icône d'enregistrement. Vie basse : `ScreenMood.Danger` (vignette rouge qui bat) + cœur (`DangerFeedback`). Debug F7 sauver ici, F8 mourir, F9 effacer. Coût de la mort décidé (provisoire) : modèle souls, voir GAME_DESIGN. Tests EditMode : 60/60.
 
 - 2026-11-15 — Scripts Blender à lancer dans le fichier ouvert (`Tools/Blender/`) : `cat_tail.py` (queue fine, rayon 0,06 → 0,035), `cat_ear_pivots.py` (origine des oreilles à leur base, côté crâne ; maillage partagé avec le miroir traité une seule fois), `cat_ear_fix.py` (remet Ear_R à sa place de `Cat.fbx`), `cat_paw.py` (vraie patte : paume, 4 doigts pliés vers le corps, griffes claires ; ancienne main retirée). Export Unity : origine des oreilles à leur base, avant-bras = morceau le plus long.
 - 2026-11-15 — `cat_tail.py` refait chaque segment de queue (tube effilé 8 côtés + demi-boule arrière de même rayon, bout arrondi, couleur reprise) : plus de pointes aux articulations (l'ancien affinage avait écrasé les boules en fuseaux). `cat_straighten.py` : torse à 12° (au lieu de 22), tête/bras/jambes gardent leur orientation, hanches à la même hauteur.

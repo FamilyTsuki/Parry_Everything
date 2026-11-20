@@ -42,6 +42,19 @@ namespace ParryEverything.Tests
             Assert.AreEqual(GameState.Playing, machine.State);
         }
 
+        // Réveil (après la mort ou « Continuer ») : ni pause, ni mort, puis le jeu
+        [Test]
+        public void Waking_ThenPlaying()
+        {
+            var machine = new GameStateMachine(GameState.Waking);
+
+            Assert.IsFalse(machine.TogglePause(), "Pas de pause pendant le réveil");
+            Assert.IsFalse(machine.PlayerDied());
+            Assert.IsTrue(machine.FinishWaking());
+            Assert.AreEqual(GameState.Playing, machine.State);
+            Assert.IsFalse(machine.FinishWaking(), "Déjà réveillé");
+        }
+
         [Test]
         public void CannotDieWhilePaused()
         {

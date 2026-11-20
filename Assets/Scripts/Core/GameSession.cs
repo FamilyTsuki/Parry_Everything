@@ -24,6 +24,8 @@ namespace ParryEverything.Core
 
         public static Vector3? RespawnPoint { get; set; }
         public static string SanctuaryId { get; set; }
+        // Nom du dernier lieu de repos, pour l'écran titre
+        public static string PlaceName { get; set; }
         // Membres à remettre sur le joueur au démarrage de la scène
         public static IReadOnlyList<LimbSave> Limbs => limbs;
 
@@ -48,6 +50,7 @@ namespace ParryEverything.Core
             flags.Clear();
             RespawnPoint = null;
             SanctuaryId = null;
+            PlaceName = null;
             BehaviorLedger.Reset();
         }
 
@@ -57,6 +60,7 @@ namespace ParryEverything.Core
             if (data == null) return;
             RespawnPoint = data.hasRespawnPoint ? data.respawnPoint : (Vector3?)null;
             SanctuaryId = data.sanctuaryId;
+            PlaceName = data.placeName;
             if (data.bossesDefeated != null)
             {
                 foreach (string id in data.bossesDefeated) MarkBossDefeated(id);
@@ -76,6 +80,7 @@ namespace ParryEverything.Core
                 hasRespawnPoint = RespawnPoint.HasValue,
                 respawnPoint = RespawnPoint ?? Vector3.zero,
                 sanctuaryId = SanctuaryId,
+                placeName = PlaceName,
                 bossesDefeated = new List<string>(bossesDefeated),
                 limbs = new List<LimbSave>(limbs),
                 flags = new List<string>(flags),

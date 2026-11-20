@@ -17,6 +17,7 @@ namespace ParryEverything.Core
         public bool hasRespawnPoint;
         public Vector3 respawnPoint;
         public string sanctuaryId;
+        public string placeName;             // nom du lieu, affiché sur « Continuer » (vide : pas de nom)
 
         // Progression
         public List<string> bossesDefeated = new List<string>();

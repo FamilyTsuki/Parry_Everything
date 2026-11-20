@@ -27,6 +27,9 @@ namespace ParryEverything.Core
             { GameAction.DebugOverlay, new[] { KeyCode.F4 } },
             { GameAction.DebugToggleBody, new[] { KeyCode.F5 } },
             { GameAction.DebugKillBoss, new[] { KeyCode.F6 } },
+            { GameAction.DebugSave, new[] { KeyCode.F7 } },
+            { GameAction.DebugDie, new[] { KeyCode.F8 } },
+            { GameAction.DebugEraseSave, new[] { KeyCode.F9 } },
         };
 
         private static readonly Dictionary<GameAction, KeyCode[]> bindings = new Dictionary<GameAction, KeyCode[]>();

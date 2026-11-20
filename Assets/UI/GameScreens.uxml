@@ -1,0 +1,81 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Écrans du jeu (titre, pause, options, confirmation, mort, fin). Logique : Scripts/UI/GameScreens.cs.
+         Les noms (name="...") sont lus par le script : les garder en modifiant la mise en page. -->
+    <Style src="GameScreens.uss" />
+    <ui:VisualElement name="root" class="root" picking-mode="Ignore">
+
+        <!-- Titre : la scène vit derrière, ombre à gauche pour lire le menu -->
+        <ui:VisualElement name="title-screen" class="screen">
+            <ui:VisualElement name="title-shade" class="side-shade" picking-mode="Ignore" />
+            <ui:VisualElement class="column">
+                <ui:Label name="game-title" text="PARRY EVERYTHING" class="game-title" />
+                <ui:VisualElement class="menu">
+                    <ui:Button name="btn-continue" text="Continuer" class="menu-item" />
+                    <ui:Label name="continue-detail" text="" class="item-detail" picking-mode="Ignore" />
+                    <ui:Button name="btn-new" text="Nouvelle partie" class="menu-item" />
+                    <ui:Button name="btn-options" text="Options" class="menu-item" />
+                    <ui:Button name="btn-quit" text="Quitter" class="menu-item" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="controls-hint" text="" class="controls-hint" picking-mode="Ignore" />
+            <ui:Label name="version" text="" class="version" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <!-- Pause -->
+        <ui:VisualElement name="pause-screen" class="screen shade">
+            <ui:VisualElement class="column">
+                <ui:Label text="Pause" class="screen-heading" />
+                <ui:VisualElement class="menu">
+                    <ui:Button name="btn-resume" text="Reprendre" class="menu-item" />
+                    <ui:Button name="btn-pause-options" text="Options" class="menu-item" />
+                    <ui:Button name="btn-to-title" text="Menu titre" class="menu-item" />
+                    <ui:Button name="btn-pause-quit" text="Quitter le jeu" class="menu-item" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Options : lignes remplies par le script (← → pour changer une valeur) -->
+        <ui:VisualElement name="options-screen" class="screen shade">
+            <ui:VisualElement class="column">
+                <ui:Label text="Options" class="screen-heading" />
+                <ui:VisualElement name="options-list" class="options-list" />
+                <ui:Button name="btn-options-back" text="Retour" class="menu-item back-item" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Confirmation -->
+        <ui:VisualElement name="confirm-screen" class="screen shade">
+            <ui:VisualElement class="dialog">
+                <ui:Label name="confirm-message" text="" class="dialog-message" />
+                <ui:Label name="confirm-detail" text="" class="dialog-detail" />
+                <ui:VisualElement class="dialog-buttons">
+                    <ui:Button name="btn-confirm-no" text="Annuler" class="menu-item dialog-item" />
+                    <ui:Button name="btn-confirm-yes" text="Confirmer" class="menu-item dialog-item" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Mort : un mot, au ralenti -->
+        <ui:VisualElement name="death-screen" class="screen" picking-mode="Ignore">
+            <ui:Label name="death-word" text="CONSUMÉ" class="death-word" picking-mode="Ignore" />
+            <ui:Label name="death-hint" text="" class="death-hint" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <!-- Fin de la tranche -->
+        <ui:VisualElement name="end-screen" class="screen shade-dark">
+            <ui:VisualElement class="center-column">
+                <ui:Label text="À suivre" class="end-title" />
+                <ui:Button name="btn-end-title" text="Menu titre" class="menu-item end-item" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Indicateur de sauvegarde -->
+        <ui:VisualElement name="save-indicator" class="save-indicator" picking-mode="Ignore">
+            <ui:VisualElement name="save-glyph" class="save-glyph" picking-mode="Ignore" />
+            <ui:Label text="Enregistrement" class="save-label" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <!-- Fondu au noir (ScreenFade), toujours au-dessus -->
+        <ui:VisualElement name="fade" class="fade" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

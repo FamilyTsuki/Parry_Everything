@@ -20,6 +20,9 @@ namespace ParryEverything.Core
         DebugToBoss,
         DebugOverlay,
         DebugToggleBody,
-        DebugKillBoss
+        DebugKillBoss,
+        DebugSave,
+        DebugDie,
+        DebugEraseSave
     }
 }

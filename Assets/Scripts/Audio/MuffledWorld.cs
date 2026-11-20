@@ -1,3 +1,4 @@
+using ParryEverything.Core;
 using ParryEverything.Player;
 using UnityEngine;
 
@@ -55,7 +56,7 @@ namespace ParryEverything.Audio
             cutoff = Mathf.Exp(Mathf.Lerp(Mathf.Log(cutoff), Mathf.Log(target), k));
             filter.cutoffFrequency = cutoff;
 
-            heart.volume = Mathf.Lerp(heart.volume, Pick(heartbeatByLevel, level), k);
+            heart.volume = Mathf.Lerp(heart.volume, Pick(heartbeatByLevel, level) * GameSettings.SfxVolume, k);
             if (music != null) music.Transpose = Pick(musicSemitonesByLevel, level);
         }
 

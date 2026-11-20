@@ -563,7 +563,7 @@ namespace ParryEverything.Player
             if (sfx != null && hurtClip != null)
             {
                 sfx.pitch = Random.Range(0.9f, 1.08f);
-                sfx.PlayOneShot(hurtClip, hurtVolume * Mathf.Clamp(0.6f + damage / 30f, 0.6f, 1.2f));
+                sfx.PlayOneShot(hurtClip, hurtVolume * Mathf.Clamp(0.6f + damage / 30f, 0.6f, 1.2f) * GameSettings.SfxVolume);
             }
             bloodPos.z = transform.position.z;
             SpawnSparks(bloodPos, hurtColor, 50, 1.3f);

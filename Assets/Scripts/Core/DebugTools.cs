@@ -6,7 +6,8 @@ namespace ParryEverything.Core
 {
     // Outils de debug, actifs seulement dans l'éditeur et les builds de développement.
     // F1 : soigner   F2 : invincible   F3 : aller au boss   F4 : panneau (état, âme, membres, fenêtres de parade)
-    // F5 : âme → boule → debout (2 pattes) → âme   F6 : tuer le boss. Touches définies dans GameInput.
+    // F5 : âme → boule → debout (2 pattes) → âme   F6 : tuer le boss
+    // F7 : sauvegarder ici   F8 : mourir (tester la mise en scène)   F9 : effacer la sauvegarde. Touches définies dans GameInput.
     public class DebugTools : MonoBehaviour
     {
         [SerializeField] private float bossApproachDistance = 8f;   // distance au boss après F3 (il s'active sous 16)
@@ -76,6 +77,21 @@ namespace ParryEverything.Core
             {
                 body.Invulnerable = !body.Invulnerable;
                 Say(body.Invulnerable ? "Invincible : oui" : "Invincible : non");
+            }
+            if (GameInput.Pressed(GameAction.DebugSave) && GameFlow.Instance != null)
+            {
+                GameFlow.Instance.SaveAtSanctuary("debug", body.transform.position, "Point de debug");
+                Say("Sauvegardé ici");
+            }
+            if (GameInput.Pressed(GameAction.DebugDie))
+            {
+                body.Invulnerable = false;
+                body.Kill();
+            }
+            if (GameInput.Pressed(GameAction.DebugEraseSave))
+            {
+                SaveSystem.Delete();
+                Say("Sauvegarde effacée (la partie en cours continue)");
             }
             if (GameInput.Pressed(GameAction.DebugToBoss) && boss != null && GameFlow.Instance != null)
             {

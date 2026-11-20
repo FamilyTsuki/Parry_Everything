@@ -130,6 +130,33 @@ namespace ParryEverything.Tests
             Assert.IsFalse(data.hasRespawnPoint);
         }
 
+        // Sauvegarde abîmée (arrêt brutal, disque) : la copie précédente est relue
+        [Test]
+        public void Load_CorruptFile_FallsBackToBackup()
+        {
+            SaveSystem.Save(new SaveData { placeName = "ancien" }, path);
+            SaveSystem.Save(new SaveData { placeName = "récent" }, path);
+            File.WriteAllText(path, "{ pas du json");
+
+            SaveData loaded = SaveSystem.Load(path);
+
+            Assert.IsNotNull(loaded);
+            Assert.AreEqual("ancien", loaded.placeName);
+        }
+
+        [Test]
+        public void Delete_RemovesBackupToo()
+        {
+            SaveSystem.Save(new SaveData(), path);
+            SaveSystem.Save(new SaveData(), path);
+            Assert.IsTrue(File.Exists(SaveSystem.BackupPath(path)));
+
+            SaveSystem.Delete(path);
+
+            Assert.IsFalse(SaveSystem.HasSave(path));
+            Assert.IsFalse(File.Exists(SaveSystem.BackupPath(path)));
+        }
+
         [Test]
         public void Delete_RemovesSave()
         {

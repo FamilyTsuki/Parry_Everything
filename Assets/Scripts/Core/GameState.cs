@@ -8,6 +8,7 @@ namespace ParryEverything.Core
         Paused,
         Dead,
         End,
-        Cutscene       // scène sans contrôle du joueur (vision, couture)
+        Cutscene,      // scène sans contrôle du joueur (vision, couture)
+        Waking         // réveil après la mort : le temps coule, le joueur n'agit pas encore
     }
 }

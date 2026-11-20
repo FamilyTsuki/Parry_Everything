@@ -12,6 +12,7 @@ namespace ParryEverything.Environment
     public class Sanctuary : MonoBehaviour
     {
         [SerializeField] private string sanctuaryId = "zone1-gardien";
+        [SerializeField] private string placeName = "Sanctuaire du Gardien";   // affiché sur « Continuer »
         [SerializeField] private Vector3 spawnOffset = Vector3.zero;   // point de réapparition par rapport au sanctuaire
 
         [Header("Flamme")]
@@ -54,7 +55,7 @@ namespace ParryEverything.Environment
             if (body == null || body.IsDead) return;
 
             body.RestAtSanctuary();
-            if (GameFlow.Instance != null) GameFlow.Instance.SaveAtSanctuary(sanctuaryId, SpawnPoint);
+            if (GameFlow.Instance != null) GameFlow.Instance.SaveAtSanctuary(sanctuaryId, SpawnPoint, placeName);
 
             flare = 1f;
             ParticleBurst.Spawn("SanctuaryRest", transform.position + Vector3.up * 0.5f, restParticleColor, 60,

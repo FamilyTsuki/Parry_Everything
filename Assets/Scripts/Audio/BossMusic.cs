@@ -1,3 +1,4 @@
+using ParryEverything.Core;
 using ParryEverything.Boss;
 using ParryEverything.Player;
 using UnityEngine;
@@ -112,6 +113,8 @@ namespace ParryEverything.Audio
         //  Thread principal
         // =====================================================================
 
+        private AudioSource src;   // volume réglé par les options (GameSettings.MusicVolume)
+
         private void Awake()
         {
             sampleRate = AudioSettings.outputSampleRate;
@@ -121,7 +124,7 @@ namespace ParryEverything.Audio
 
         private void Start()
         {
-            AudioSource src = GetComponent<AudioSource>();
+            src = GetComponent<AudioSource>();
             if (src == null) src = gameObject.AddComponent<AudioSource>();
             src.playOnAwake = false;
             src.loop = true;
@@ -154,6 +157,7 @@ namespace ParryEverything.Audio
 
         private void Update()
         {
+            if (src != null) src.volume = GameSettings.MusicVolume;
             if (hero == null) hero = FindFirstObjectByType<PlayerController>();
             if (boss == null && !wasActive) boss = FindFirstObjectByType<HellGuardian>();
 

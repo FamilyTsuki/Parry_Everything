@@ -29,14 +29,26 @@ namespace ParryEverything.Core
         [Range(0f, 2f)] [SerializeField] private float dreadWobble = 0.8f;
         [Range(0f, 0.2f)] [SerializeField] private float dreadGrain = 0.05f;
 
+        [Header("Danger (vie basse)")]
+        [SerializeField] private float dangerPulseSpeed = 5f;      // battements de la vignette, par seconde × 2π
+        [Range(0f, 1f)] [SerializeField] private float dangerPulseDepth = 0.3f;
+
         private Material material;
         private float dread;
+        private float danger;
 
         // Niveau de malaise 0..1, piloté de l'extérieur (Atmosphere)
         public float Dread
         {
             get => dread;
             set => dread = Mathf.Clamp01(value);
+        }
+
+        // Vie basse 0..1, pilotée par le joueur (DangerFeedback) : la vignette rouge se resserre et bat
+        public float Danger
+        {
+            get => danger;
+            set => danger = Mathf.Clamp01(value);
         }
 
         private void OnDisable()
@@ -61,13 +73,17 @@ namespace ParryEverything.Core
                 material.hideFlags = HideFlags.HideAndDontSave;
             }
 
+            // Le malaise du boss et le danger se cumulent sans dépasser 1 ; le danger bat (plus vite quand il monte)
+            float pulse = 1f - dangerPulseDepth * (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * dangerPulseSpeed * (1f + danger)));
+            float d = Mathf.Max(dread, danger * pulse);
+
             material.SetFloat("_Desaturate", desaturate);
             material.SetFloat("_KeepRed", keepRed);
             material.SetColor("_Tint", tint);
-            material.SetFloat("_Vignette", Mathf.Lerp(vignette, dreadVignette, dread));
-            material.SetColor("_VignetteColor", Color.Lerp(vignetteColor, dreadVignetteColor, dread));
+            material.SetFloat("_Vignette", Mathf.Lerp(vignette, dreadVignette, d));
+            material.SetColor("_VignetteColor", Color.Lerp(vignetteColor, dreadVignetteColor, d));
             material.SetFloat("_Grain", Mathf.Lerp(grain, dreadGrain, dread));
-            material.SetFloat("_Aberration", Mathf.Lerp(aberration, dreadAberration, dread));
+            material.SetFloat("_Aberration", Mathf.Lerp(aberration, dreadAberration, d));
             material.SetFloat("_Wobble", Mathf.Lerp(wobble, dreadWobble, dread));
             Graphics.Blit(source, destination, material);
         }

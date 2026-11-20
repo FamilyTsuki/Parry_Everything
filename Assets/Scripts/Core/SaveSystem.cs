@@ -16,9 +16,13 @@ namespace ParryEverything.Core
 
         public static string DefaultPath => Path.Combine(Application.persistentDataPath, FileName);
 
+        // Copie de la sauvegarde précédente, gardée à chaque écriture : relue si la sauvegarde est abîmée
+        public static string BackupPath(string path) => path + ".bak";
+
         public static bool HasSave(string path = null)
         {
-            return File.Exists(path ?? DefaultPath);
+            path = path ?? DefaultPath;
+            return File.Exists(path) || File.Exists(BackupPath(path));
         }
 
         // Écrit la sauvegarde. Passe par un fichier temporaire : un arrêt brutal ne laisse pas un fichier à moitié écrit.
@@ -33,14 +37,24 @@ namespace ParryEverything.Core
 
             string tmp = path + ".tmp";
             File.WriteAllText(tmp, ToJson(data));
-            if (File.Exists(path)) File.Replace(tmp, path, null);
+            if (File.Exists(path)) File.Replace(tmp, path, BackupPath(path));
             else File.Move(tmp, path);
         }
 
-        // Lit la sauvegarde. Renvoie null si elle n'existe pas ou est illisible (le jeu repart alors de zéro).
+        // Lit la sauvegarde ; si elle est absente ou abîmée, la copie précédente (.bak).
+        // Renvoie null si aucune n'est lisible (le jeu repart alors de zéro).
         public static SaveData Load(string path = null)
         {
             path = path ?? DefaultPath;
+            SaveData data = ReadFile(path);
+            if (data != null) return data;
+            data = ReadFile(BackupPath(path));
+            if (data != null) Debug.LogWarning($"Sauvegarde illisible, copie précédente utilisée ({BackupPath(path)}).");
+            return data;
+        }
+
+        private static SaveData ReadFile(string path)
+        {
             if (!File.Exists(path)) return null;
             try
             {
@@ -57,6 +71,7 @@ namespace ParryEverything.Core
         {
             path = path ?? DefaultPath;
             if (File.Exists(path)) File.Delete(path);
+            if (File.Exists(BackupPath(path))) File.Delete(BackupPath(path));
         }
 
         public static string ToJson(SaveData data)

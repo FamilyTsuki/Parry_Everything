@@ -376,10 +376,12 @@ Bonnes bases, mais pas encore satisfaisantes : à retravailler.
 
 #### Mort, sauvegarde, menus
 
-- **Mort :** fondu au noir (1 s), retour au dernier sanctuaire avec l'état du corps sauvegardé à ce sanctuaire. Le boss repart de sa phase 1. Pas d'écran de game over séparé.
-- **Sauvegarde :** un fichier JSON dans `Application.persistentDataPath`. Contenu : sanctuaire actuel, boss vaincus, pattes possédées, compteurs de comportement. Écrite à chaque sanctuaire et à chaque boss vaincu.
+- **Mort :** courte mise en scène (≈ 3 s, passable avec une touche) : ralenti, l'âme s'éteint en braises, le mot « CONSUMÉ » apparaît et se dissout, fondu au noir ; la scène est rechargée derrière le noir, puis le chat se réveille au dernier sanctuaire (fondu depuis le noir, lueur, il reprend la main après ≈ 1,5 s) avec l'état du corps sauvegardé. Le boss repart de sa phase 1. Pas d'écran de game over séparé.
+- **Coût de la mort** *(décision provisoire, 2026-11-20, à revoir en phase 2)* : modèle « souls ». Gardés : boss vaincus, membres cousus (dernière sauvegarde), âmes en banque. Perdus : position, ennemis revenus, et les **âmes portées**, qui tombent là où le chat est mort ; on peut les reprendre une fois, mourir avant les perd. La monnaie d'âmes n'existe pas encore (à concevoir avec le marché des âmes).
+- **Sauvegarde :** un fichier JSON dans `Application.persistentDataPath`, avec une copie de la précédente (`.bak`, relue si la sauvegarde est abîmée). Contenu : sanctuaire actuel et son nom, boss vaincus, membres, compteurs de comportement. Écrite à chaque sanctuaire, à chaque boss vaincu et à chaque recouture ; une petite icône « Enregistrement » s'affiche en bas à droite.
 - **Comportement (enregistré, pas encore utilisé) :** ennemis épargnés, âmes absorbées, âmes errantes bousculées.
-- **Menus (OnGUI via `GuiDraw` pour l'instant) :** titre (Continuer, Nouvelle partie, Quitter) ; pause sur Échap (Reprendre, Menu titre) ; écran de fin de tranche.
+- **Menus (UI Toolkit, `UI/GameScreens`) :** titre sur la scène vivante (caméra qui dérive, l'âme qui flotte) : Continuer (lieu + date de la sauvegarde), Nouvelle partie (confirmation si une partie existe), Options, Quitter ; pause sur Échap : Reprendre, Options, Menu titre, Quitter (confirmations) ; options : volumes (général, musique et ambiance, effets), plein écran, résolution, synchro verticale ; écran de fin de tranche. Navigation flèches + Entrée, Échap = retour, souris ; sons d'interface synthétisés ; fondus partout. Manette : phase 5.
+- **Vie basse :** sans barre, elle se sent : la vignette rouge se resserre et bat, un cœur sourd bat de plus en plus vite (âme à nu : vie de l'âme ; avec un corps : vie du ventre).
 - **HUD :** aucune barre de vie. L'état se lit sur le corps du chat (pattes présentes et abîmées, taille de l'âme). **Mise à jour (2026-11-15)** : petite silhouette du chat en haut à droite (`BodyHud`), découpée en membres : chaque membre se colore selon sa vie (clair → orange → rouge, clignote blanc quand il est touché), grisé s'il est arraché, pastille de couleur pour son effet (rouge hémorragie, vert infection, violet hypertrophie). Pas de chiffres ; rien en âme.
 
 #### Commandes (clavier)
@@ -405,7 +407,8 @@ Respecte les conventions de `AGENTS.md`.
 | `LimbPickup` | Player/ | membre au sol, ramassable. |
 | `Sanctuary` | Environment/ | point de sauvegarde, recouture automatique, coupe la musique d'ambiance. |
 | `SaveSystem` | Core/ | lecture et écriture du JSON. |
-| `GameFlow` | Core/ | états du jeu (menu, jeu, pause, mort, fin) et réapparition. |
+| `GameFlow` | Core/ | états du jeu (menu, jeu, pause, mort, réveil, fin), mise en scène de la mort, réapparition. |
+| `GameScreens` | UI/ | écrans en UI Toolkit (titre, pause, options, confirmation, mort, fin), fondu, icône de sauvegarde. |
 | `BehaviorLedger` | Core/ | compteurs de comportement. |
 | `BossFlesh` | Boss/ | ce que devient le Gardien vaincu : déclenche la couture des pattes et la vision. |
 
@@ -476,6 +479,7 @@ Respecte les conventions de `AGENTS.md`.
 - 2026-11-13 — Forme finale : un chat debout sur 2 pattes, guerrier (référence dans References/).
 - 2026-11-13 — Après la mort du Gardien, la zone 1 se rallume (braises, lumière chaude) ; elle ne s'effondre pas.
 - 2026-11-13 — Évolution de la zone 1 : le Gardien vaincu laisse un tas de chair qui s'agglutine autour de l'âme (boule qui roule, vie 80) ; l'âme marchande, au bord de la descente, fabrique 2 pattes contre un morceau de cette chair, qu'il faut revenir arracher au tas. Debout : la boule de chair (l'âme toujours entièrement recouverte) portée par 2 grandes pattes. Une patte : il sautille ; aucune : retour à la boule ; chair éclatée : retour à l'âme. Captures dans References/Evolution/.
+- 2026-11-20 — Mort *(provisoire)* : modèle « souls » plutôt que roguelike (niveaux faits main, fixes). On garde boss vaincus, membres cousus et âmes en banque ; les âmes portées tombent à l'endroit de la mort, à reprendre une fois.
 - 2026-11-13 — Vision du meurtre : 3 plans figés en ombres chinoises sur fond rouge, sans texte, fondus blancs — l'enfant recroquevillé (une ombre s'approche par la porte), le père qui lève le bras (bouteille à la main), le chat qui feule devant l'enfant.
 
 ## 11. Idées en vrac

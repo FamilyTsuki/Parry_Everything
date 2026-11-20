@@ -1,3 +1,4 @@
+using ParryEverything.Core;
 using ParryEverything.Boss;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -131,7 +132,7 @@ namespace ParryEverything.Audio
             bool fight = boss != null && boss.IsActive && !boss.IsDead;
             fighting = fight;
             dreadTarget = fight ? 1f : 0f;
-            gainTarget = Muted ? 0f : volume * (fight ? duringBoss : 1f);
+            gainTarget = Muted ? 0f : volume * (fight ? duringBoss : 1f) * GameSettings.MusicVolume;
         }
 
         private float Rand()

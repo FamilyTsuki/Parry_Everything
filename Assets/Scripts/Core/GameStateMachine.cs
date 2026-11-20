@@ -33,6 +33,9 @@ namespace ParryEverything.Core
         // Réapparition après la mort
         public bool Respawn() => State == GameState.Dead ? Go(GameState.Playing) : false;
 
+        // Fin du réveil (après une mort ou « Continuer ») : le joueur reprend la main
+        public bool FinishWaking() => State == GameState.Waking ? Go(GameState.Playing) : false;
+
         // Fin de la partie (boss vaincu, en attendant la vraie fin de zone)
         public bool Finish() => State == GameState.Playing ? Go(GameState.End) : false;
 
