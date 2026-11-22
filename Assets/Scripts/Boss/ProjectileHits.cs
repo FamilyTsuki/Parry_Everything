@@ -34,6 +34,13 @@ namespace ParryEverything.Boss
         // groundY : le sol compte même sans collider à cet endroit.
         public static bool HitsWorld(Vector3 from, Vector3 to, float radius, float groundY, out Vector3 point)
         {
+            return HitsWorld(from, to, radius, groundY, out point, out _);
+        }
+
+        // Variante : renvoie aussi le collider touché (null : le sol, sans collider)
+        public static bool HitsWorld(Vector3 from, Vector3 to, float radius, float groundY, out Vector3 point, out Collider hit)
+        {
+            hit = null;
             point = to;
             Vector3 d = to - from;
             float len = d.magnitude;
@@ -51,6 +58,7 @@ namespace ParryEverything.Boss
                     {
                         best = h.distance;
                         point = h.point;
+                        hit = h.collider;
                     }
                 }
                 if (best < float.MaxValue) return true;
