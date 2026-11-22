@@ -245,6 +245,10 @@ namespace ParryEverything.Player
 
         private PlayerBody body;
         private PlayerController controller;
+        private CatBreath breathSource;
+
+        // Un pied se pose au sol (marche ou course, debout)
+        public event System.Action Footstep;
         private CatSoul soul;
         private Rigidbody rb;
         private CatLegRig legRig;
@@ -913,7 +917,7 @@ namespace ParryEverything.Player
             float perBone = 25f / n;
             float amplitude = tailIdleAmplitude * perBone;
             float phaseStep = tailIdlePhaseStep * perBone;
-            float breath = tailBreath * Mathf.Sin(time * 2.2f);   // même rythme que la respiration du corps
+            float breath = tailBreath * BreathValue();             // même rythme que la respiration du corps
 
             float wave = 0f;                 // somme des plis de l'ondulation : décalage de l'os k
             float previous = 0f, previousDepth = 0f;
@@ -987,6 +991,12 @@ namespace ParryEverything.Player
             {
                 float rate = legs == 1 ? (speed > 0.3f ? HopRate(speed) : 0f) : Duty() * speed / Mathf.Max(0.05f, stride);
                 gaitPhase = Mathf.Repeat(gaitPhase + rate * dt, 1f);
+                // Un pied se pose : début du cycle (une patte) et à mi-cycle (l'autre)
+                bool wrapped = gaitPhase < previousPhase;
+                if (legs >= 2 && walkWeight > 0.5f && (wrapped || (previousPhase < 0.5f && gaitPhase >= 0.5f)))
+                {
+                    Footstep?.Invoke();
+                }
             }
 
             // Deux pattes : le corps monte au milieu de chaque pas (deux fois par cycle), sans tourner.
@@ -1010,7 +1020,7 @@ namespace ParryEverything.Player
             bodyDropVel += (-bodySpringStiffness * bodyDrop - bodySpringDamping * bodyDropVel) * dtc;
             bodyDrop += bodyDropVel * dtc;
 
-            float breath = Mathf.Sin(Time.time * 2.2f) * breathing * (1f - walkWeight);
+            float breath = BreathValue() * breathing * (1f - walkWeight);
             bodyY = grounded ? bob * walkWeight - crouch + bodyDrop * 0.12f + breath : 0f;
             // Au sol le torse garde son angle ; en l'air il bascule selon la vitesse verticale
             bodyPitch = grounded ? 0f : -vel.y * 2f * facing;
@@ -1598,6 +1608,17 @@ namespace ParryEverything.Player
                 renderers = thigh != null ? thigh.GetComponents<Renderer>() : leg.GetComponentsInChildren<Renderer>(true),
                 phaseOffset = index * 0.5f,
             };
+        }
+
+        // Respiration commune (CatBreath : la même que l'âme ; parée, elle s'arrête) ; aperçu éditeur : sinus
+        private float BreathValue()
+        {
+            if (Application.isPlaying)
+            {
+                if (breathSource == null) breathSource = GetComponent<CatBreath>();
+                if (breathSource != null) return breathSource.Value;
+            }
+            return Mathf.Sin(Time.time * 2.2f);
         }
     }
 }

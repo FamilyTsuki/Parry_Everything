@@ -145,7 +145,8 @@ namespace ParryEverything.Boss
 
             yield return new WaitForSecondsRealtime(0.4f);
             bool visionDone = false;
-            MurderVision.Play(() => visionDone = true);
+            // Nouvelle partie du corps : un souvenir revient
+            MurderVision.PlayNextMemory(() => visionDone = true);
             while (!visionDone) yield return null;
 
             // Pendant le blanc de fin de vision : la chair enferme l'âme, le tas se réduit, la zone se rallume

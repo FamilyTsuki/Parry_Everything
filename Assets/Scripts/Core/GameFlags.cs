@@ -9,5 +9,8 @@ namespace ParryEverything.Core
         public const string GuardianChunkCarried = "zone1.guardian-chunk-carried";
         // L'âme marchande lui a fabriqué ses 2 pattes
         public const string MerchantLegsMade = "zone1.merchant-legs-made";
+
+        // Chapitre de souvenirs déjà vu (MurderVision.Chapters, 1…)
+        public static string Memory(int chapter) => "memory." + chapter;
     }
 }

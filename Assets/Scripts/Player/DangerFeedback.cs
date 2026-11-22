@@ -20,6 +20,7 @@ namespace ParryEverything.Player
         [Range(0f, 1f)] [SerializeField] private float heartVolume = 0.5f;
 
         private PlayerBody body;
+        private CatBreath breath;
         private ScreenMood mood;
         private AudioSource source;
         private AudioClip thump;
@@ -27,10 +28,14 @@ namespace ParryEverything.Player
         private float nextBeat;
 
         public float Danger => danger;
+        // Un battement (temps réel) ; et un ralentissement du cœur demandé par CatHeart (1 = normal)
+        public event System.Action Beat;
+        public float RateScale { get; set; } = 1f;
 
         private void Awake()
         {
             body = GetComponent<PlayerBody>();
+            breath = GetComponent<CatBreath>();
             source = gameObject.AddComponent<AudioSource>();
             source.playOnAwake = false;
             source.spatialBlend = 0f;
@@ -50,7 +55,7 @@ namespace ParryEverything.Player
 
         private void Update()
         {
-            float target = GameFlow.IsPlaying && !body.IsDead ? DangerFromLife(LifeRatio()) : 0f;
+            float target = GameFlow.IsPlaying && !body.IsDead ? Mathf.Max(DangerFromLife(LifeRatio()), Suffocating()) : 0f;
             danger = Mathf.MoveTowards(danger, target, response * Time.unscaledDeltaTime);
             if (mood != null) mood.Danger = danger;
 
@@ -61,7 +66,8 @@ namespace ParryEverything.Player
             }
             if (Time.unscaledTime >= nextBeat)
             {
-                float bpm = Mathf.Lerp(heartRateCalm, heartRatePanic, danger);
+                float bpm = Mathf.Lerp(heartRateCalm, heartRatePanic, danger) * Mathf.Clamp(RateScale, 0.1f, 2f);
+                Beat?.Invoke();
                 // Battement double (lub-dub) : le second, plus faible, juste après
                 source.PlayOneShot(thump, heartVolume * danger * GameSettings.SfxVolume);
                 StartCoroutine(SecondBeat(heartVolume * danger * 0.6f));
@@ -73,6 +79,15 @@ namespace ParryEverything.Player
         {
             yield return new WaitForSecondsRealtime(0.16f);
             source.PlayOneShot(thump, volume * GameSettings.SfxVolume);
+        }
+
+        // Apnée (respiration parée) : le voile et le cœur montent jusqu'à l'étouffement
+        private float Suffocating()
+        {
+            if (breath == null) breath = GetComponent<CatBreath>();
+            if (breath == null) return 0f;
+            float t = Mathf.Clamp01((breath.Suffocation - 0.1f) / 0.85f);
+            return t * t * (3f - 2f * t);
         }
 
         // Part de vie de ce qui protège le chat

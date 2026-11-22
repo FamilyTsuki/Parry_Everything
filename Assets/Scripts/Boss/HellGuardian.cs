@@ -6,21 +6,20 @@ using UnityEngine;
 
 namespace ParryEverything.Boss
 {
-    // Boss : le Gardien des Enfers.
-    // Spectre en armure d'obsidienne qui flotte sur une queue de flammes, casque à cornes, couronne infernale,
-    // cœur de braise et faux géante. On ne peut le blesser qu'en PARANT.
+    // Boss de la zone 1. Visuel : « la Jarre aux âmes » (JarVisual, modèle Assets/Models/Jar/jar.blend) : un vieux bol
+    // grec resté sous l'eau, rempli de chair, que deux longs bras humains traînent au sol. On ne peut le blesser qu'en PARANT.
+    // Il rampe en se tirant avec ses bras (JarVisual : mains plantées au sol, cinématique inverse), frappe le sol
+    // et lance des cailloux — puis, en phase V, les morceaux de son propre bol.
     //
-    // 5 phases (barre de vie en 5 segments). Chaque phase ajoute une attaque et accélère le boss :
-    //   I   Le Gardien s'éveille : coup de faux, orbes de feu
-    //   II  Colère des Abysses   : + écrasement et ondes de choc
-    //   III Pluie d'Âmes         : + météores qui tombent du ciel (zones marquées au sol)
-    //   IV  Le Faucheur          : + charge à travers l'écran, combo de faux
-    //   V   Jugement Final       : + orbe du Jugement (échange de parades), tout plus rapide
-    // Entre deux phases : ralenti, rugissement et MÉTAMORPHOSE. Il grandit à chaque phase et la caméra recule :
-    //   II  fissures de lave sur l'armure      III ailes spectrales
-    //   IV  cornes géantes, faux en feu        V   éclats d'armure en orbite, armure noircie
-    // Aperçu des phases dans l'éditeur : champ « previewPhase ».
-    // Visuel généré en code, visible dans l'éditeur hors Play ([ExecuteAlways]).
+    // 5 phases (barre de vie en 5 segments). Chaque phase ajoute des attaques et accélère le boss :
+    //   I   : frappe d'une main, cailloux lancés
+    //   II  : + écrasement à deux mains (ondes de choc), pics de roche, Jugement (rocher échangé en parades)
+    //   III : + pluie de pierres (zones marquées au sol), caillou qui se divise
+    //   IV  : + bond (il se propulse avec les bras), double Jugement
+    //   V   : + échange truqué (feintes, accélération), bras de fer ; il lance les morceaux de son bol
+    // Entre deux phases : ralenti, rugissement, il grandit et la caméra recule. Le bol se brise :
+    //   II  les morceaux se disjoignent (fentes sur la chair)   III, IV  des morceaux tombent   V  plus de bol
+    // Aperçu des phases dans l'éditeur : champ « previewPhase ». Visible dans l'éditeur hors Play ([ExecuteAlways]).
     [ExecuteAlways]
     public class HellGuardian : MonoBehaviour
     {
@@ -30,62 +29,81 @@ namespace ParryEverything.Boss
         [SerializeField] private float maxHealth = 250f;
         [SerializeField] private float activationRange = 16f;     // le combat commence quand le joueur approche
         [SerializeField] private float groundY = -0.45f;
-        [SerializeField] private float hoverHeight = 2.2f;        // hauteur du centre au-dessus du sol (en unités de scale)
+        [SerializeField] private float hoverHeight = 0.95f;       // hauteur du centre au-dessus du sol (en unités de scale) : bol posé
         [SerializeField] private float moveSpeed = 6f;
         [SerializeField] private float preferredDistance = 7f;    // distance de repos par rapport au joueur
         [SerializeField] private float hitRadius = 0.6f;          // portée des coups autour du centre du joueur
 
-        [Header("Faux")]
+        [Header("Frappe d'une main")]
         [SerializeField] private float swingWindup = 0.65f;
         [SerializeField] private float swingDamage = 20f;
-        [SerializeField] private float swingParryDamage = 12f;    // dégâts subis par le boss quand on pare la faux
+        [SerializeField] private float swingParryDamage = 12f;    // dégâts subis par le boss quand on pare la frappe
         [SerializeField] private float staggerDuration = 1.3f;
 
-        [Header("Orbes")]
+        [Header("Cailloux lancés")]
         [SerializeField] private int orbCount = 3;
         [SerializeField] private float orbSpeed = 7f;
         [SerializeField] private float orbDamage = 10f;
         [SerializeField] private float orbReflectDamage = 8f;
 
-        [Header("Écrasement")]
+        [Header("Écrasement à deux mains, ondes de choc")]
         [SerializeField] private float slamDamage = 15f;
         [SerializeField] private float slamParryDamage = 10f;
         [SerializeField] private float shockwaveSpeed = 9f;
         [SerializeField] private float shockwaveDamage = 10f;
 
-        [Header("Météores (phase III+)")]
+        [Header("Pluie de pierres (phase III+)")]
         [SerializeField] private int meteorCount = 6;
         [SerializeField] private float meteorDamage = 12f;
         [SerializeField] private float meteorReflectDamage = 6f;
 
-        [Header("Charge (phase IV+)")]
+        [Header("Bond (phase IV+)")]
         [SerializeField] private float dashDamage = 20f;
         [SerializeField] private float dashParryDamage = 14f;
 
-        [Header("Fente de la faux (phase II+) et piliers de feu (phase II+)")]
-        [SerializeField] private float slashDamage = 14f;
-        [SerializeField] private float slashSpeed = 12f;
+        [Header("Pics de roche (phase II+)")]
         [SerializeField] private float pillarDamage = 18f;
 
-        [Header("Jugement (phase V)")]
+        [Header("Jugement (phase II+)")]
         [SerializeField] private float judgmentDamage = 30f;
         [SerializeField] private float judgmentReflectDamage = 25f;
         [SerializeField] private int judgmentRallies = 2;         // fois où le boss renvoie l'orbe avant de la prendre
+
+        [Header("Échanges : caillou qui se divise (III+), double Jugement (IV+), échange truqué (V)")]
+        [SerializeField] private float splitDamage = 14f;
+        [SerializeField] private float splitReflectDamage = 24f;  // partagé entre les morceaux finaux
+        [SerializeField] private int splitCount = 2;              // divisions : 1, 2 puis 4 bulles
+        [SerializeField] private float splitStagger = 0.35f;      // écart entre deux morceaux
+        [SerializeField] private float doubleDamage = 20f;
+        [SerializeField] private float doubleReflectDamage = 14f; // par bulle
+        [SerializeField] private float doubleOffset = 0.55f;      // écart entre les deux bulles
+        [SerializeField] private float riggedDamage = 25f;
+        [SerializeField] private float riggedReflectDamage = 35f;
+        [SerializeField] private int riggedRallies = 4;
+        [SerializeField] private float riggedSpeedUp = 1.18f;     // vitesse ×1,18 à chaque renvoi
+        [SerializeField] private float riggedFeintChance = 0.5f;
+
+        [Header("Bras de fer (phase V)")]
+        [SerializeField] private float tugDamage = 35f;
+        [SerializeField] private float tugReflectDamage = 40f;
+        [SerializeField] private int tugParries = 4;              // parades pour l'envoyer dans le boss
+        [SerializeField] private float tugSpeed = 3f;
+        [SerializeField] private float tugSpeedUp = 1.2f;         // ajoutée à chaque parade
 
         [Header("Apparence")]
         [SerializeField] private float scale = 1.8f;              // taille en phase I ; il grandit à chaque phase
         [SerializeField] private float growthPerPhase = 0.09f;    // +9 % de taille par phase
         [SerializeField] private float turnToCamera = 25f;
-        [SerializeField] private Color armorColor = new Color(0.1f, 0.08f, 0.12f);
-        [SerializeField] private Color trimColor = new Color(0.42f, 0.1f, 0.07f);
-        [SerializeField] private Color bladeColor = new Color(0.3f, 0.3f, 0.36f);
+        [SerializeField] private GameObject jarModel;             // Assets/Models/Jar/jar.blend
         [SerializeField] private Color glowColor = new Color(1f, 0.5f, 0.1f);     // phase I
         [SerializeField] private Color rageColor = new Color(1f, 0.05f, 0.12f);   // phase V
         [Range(0, 4)] public int previewPhase = 0;              // éditeur hors Play : voir le boss à une phase donnée
         [SerializeField] private bool labMode;                  // scène AnimationLab : pas de combat, gestes joués à la demande
 
         // Gestes jouables un par un dans la scène AnimationLab
-        public enum LabMove { Swing, Orbs, Slam, MeteorRain, Dash, Pillars, Judgment, Roar, Stagger, PhaseTransition, Hit, Die }
+        // (noms historiques : Swing = frappe d'une main, Orbs = cailloux, MeteorRain = pluie de pierres, Dash = bond)
+        public enum LabMove { Swing, Orbs, Slam, MeteorRain, Dash, Pillars, Judgment, Roar, Stagger, PhaseTransition, Hit, Die,
+            SplitBubble, DoubleJudgment, RiggedRally, TugOfWar }
 
         private static readonly string[] phaseNames =
         {
@@ -107,60 +125,38 @@ namespace ParryEverything.Boss
         private float flip = -1f;               // facing animé (passe par 0 quand il se retourne)
         private bool lockFacing;
         private Vector3 moveVel;
+        private float crawlWant;                // distance (x) jusqu'au but de MoveToward, lue à l'image suivante
+        private float crawlSpeed;
+        private bool crawlWanted;
         private float bannerTime = -100f;
         private BossProjectile judgmentOrb;
         private bool phaseChanged;              // changement de phase à lancer au prochain Update
         private bool dieStarted;
         private Vector3 playerVel;              // vitesse du joueur (visée anticipée)
         private Vector3 lastPlayerPos;
-        private const float bladeScale = 1.4f;          // faux géante
 
         public bool IsDead { get { return dead; } }
         public string BossId => bossId;
         public bool IsActive { get { return active; } }
         public int Phase { get { return phase; } }
         public Vector3 CorePosition { get { return core != null ? core.position : transform.position; } }
+        public float GroundY => groundY;
 
         // ---------- Pose (les coroutines changent les cibles, Update lisse) ----------
-        private float weaponAngle = 25f, weaponTarget = 25f;   // angle de la faux (+ = levée derrière)
-        private float tilt, tiltTarget = 6f;                    // inclinaison du corps (+ = en avant)
-        private float handRaise, handRaiseTarget;               // main libre levée (lancer d'orbes)
-        private float glow, glowTarget;                         // intensité de la lueur
-        private float sharpness = 8f;                           // vitesse de la pose (élevée pendant un coup)
+        private float tilt, tiltTarget = 4f;                    // inclinaison du bol (+ = en avant)
         private float flash;                                    // flash blanc quand il est touché
-        private float punch;
         private float deathFade = 1f;
-        private float crownSpin;
         // Ressorts (position + vitesse) : élan, inertie et léger dépassement au lieu de mouvements secs
-        private float weaponVel, tiltVel, handVel;
-        private float punchPos, punchVel;
-        private float headAngle, headVel;
-        private float tailSway, tailVel;
+        private float tiltVel;
         private float squash, squashVel;
         private Vector3 lastPos, bodyVel;
 
         // ---------- Visuel ----------
         private readonly GeneratedObjects generated = new GeneratedObjects();
         private GameObject visual;
-        private Transform bodyT, core, tail, tailPivot, head, weaponPivot, frontHand, backHand, crown;
-        private readonly List<Transform> crownSpikes = new List<Transform>();
+        private JarVisual jar;
+        private Transform bodyT, core;
         private float curScale = 1.8f;                          // taille actuelle (grandit à chaque phase)
-        // Pièces qui apparaissent à une phase donnée (pop animé)
-        private readonly List<Transform> phaseParts = new List<Transform>();
-        private readonly List<Vector3> phasePartBase = new List<Vector3>();
-        private readonly List<int> phasePartMin = new List<int>();
-        private readonly List<float> phasePartGrow = new List<float>();
-        private readonly List<float> phasePartVel = new List<float>();
-        private readonly List<Transform> horns = new List<Transform>();
-        private readonly List<Transform> wings = new List<Transform>();
-        private Transform orbit;
-        private ParticleSystem bladeFire;
-        private float hornGrow;
-        private ParticleSystem embers;
-        private readonly List<Vector3> bladePoints = new List<Vector3>(); // tranchant, repère de la faux
-        private Material armorMat, trimMat, bladeMat, glowMat;
-        private readonly List<Material> mats = new List<Material>();
-        private readonly List<Color> baseColors = new List<Color>();
 
         // =====================================================================
         //  Cycle de vie
@@ -175,17 +171,7 @@ namespace ParryEverything.Boss
         private void OnDisable()
         {
             generated.DestroyAll();
-            mats.Clear();
-            baseColors.Clear();
-            bladePoints.Clear();
-            crownSpikes.Clear();
-            phaseParts.Clear();
-            phasePartBase.Clear();
-            phasePartMin.Clear();
-            phasePartGrow.Clear();
-            phasePartVel.Clear();
-            horns.Clear();
-            wings.Clear();
+            jar = null;
             visual = null;
             if (Application.isPlaying) TimeControl.SetEffectScale(1f);
         }
@@ -282,7 +268,9 @@ namespace ParryEverything.Boss
             {
                 trailHealth = Mathf.MoveTowards(trailHealth, health, maxHealth * 0.25f * Time.deltaTime);
             }
-            ApplyPose(Time.deltaTime, Time.time);
+            // Temps arrêté (pause, arrêt sur image d'une parade) : on garde la pose telle quelle
+            // (dt 0 = aperçu éditeur : remettrait les mains au repos d'un coup)
+            if (Time.deltaTime > 0f) ApplyPose(Time.deltaTime, Time.time);
         }
 
         // =====================================================================
@@ -316,30 +304,39 @@ namespace ParryEverything.Boss
         // Choisit une attaque débloquée par la phase, jamais deux fois la même d'affilée
         private IEnumerator PickAttack()
         {
-            // 0 faux, 1 orbes, 2 écrasement, 3 météores, 4 charge, 5 jugement, 6 piliers
+            // 0 frappe, 1 cailloux, 2 écrasement, 3 pluie de pierres, 4 bond, 5 jugement, 6 pics de roche,
+            // 7 caillou qui se divise, 8 double jugement, 10 échange truqué, 11 bras de fer
             List<int> pool = new List<int> { 0, 1 };
+            bool exchangeFree = judgmentOrb == null && RallyBubble.ActiveCount == 0 && PushBubble.ActiveCount == 0;
             if (phase >= 1) { pool.Add(2); pool.Add(6); }
+            if (phase >= 1 && exchangeFree) pool.Add(5);
             if (phase >= 2) pool.Add(3);
+            if (phase >= 2 && exchangeFree) pool.Add(7);
             if (phase >= 3) pool.Add(4);
-            if (phase >= 4 && judgmentOrb == null) pool.Add(5);
-            if (DistToPlayer() < 5f * curScale) pool.Add(0); // proche : la faux plus souvent
+            if (phase >= 3 && exchangeFree) pool.Add(8);
+            if (phase >= 4 && exchangeFree) { pool.Add(10); pool.Add(11); }
+            if (DistToPlayer() < Reach(FrontArm) * 0.8f) pool.Add(0); // proche : la frappe plus souvent
             if (pool.Count > 1) pool.RemoveAll(a => a == lastAttack && pool.Count > 1);
 
             int pick = pool[Random.Range(0, pool.Count)];
             lastAttack = pick;
             switch (pick)
             {
-                case 0: yield return Swing(); break;
-                case 1: yield return Orbs(); break;
+                case 0: yield return Slap(); break;
+                case 1: yield return ThrowRocks(); break;
                 case 2: yield return Slam(); break;
-                case 3: yield return MeteorRain(); break;
-                case 4: yield return Dash(); break;
+                case 3: yield return RockRain(); break;
+                case 4: yield return Leap(); break;
                 case 5: yield return Judgment(); break;
                 case 6: yield return Pillars(); break;
+                case 7: yield return SplitBubble(); break;
+                case 8: yield return DoubleJudgment(); break;
+                case 10: yield return RiggedRally(); break;
+                case 11: yield return TugOfWar(); break;
             }
         }
 
-        // Sort du sol en tremblant, rugit
+        // Sort de terre en s'agrippant au sol, puis rugit
         private IEnumerator Intro()
         {
             invulnerable = true;
@@ -347,7 +344,6 @@ namespace ParryEverything.Boss
             SetVisible(true);
             Framing();
             Shake(1.6f, 0.15f);
-            glowTarget = 1f;
             Vector3 start = transform.position;
             Vector3 end = new Vector3(start.x, HoverY(), 0f);
             float t = 0f;
@@ -361,25 +357,39 @@ namespace ParryEverything.Boss
             invulnerable = false;
         }
 
-        // Faux levée, corps cabré, lueur maximale, écran qui tremble, anneau de braises
+        // Les deux bras se dressent, tremblent, puis frappent le sol ensemble
         private IEnumerator Roar(float duration)
         {
-            weaponTarget = 95f;
-            tiltTarget = -15f;
-            handRaiseTarget = 1f;
-            glowTarget = 3f;
+            tiltTarget = -14f;
             flash = 0.6f;
+            Vector3 f0 = ShoulderPos(FrontArm), b0 = ShoulderPos(BackArm);
+            Vector3 fUp = ArmPoint(FrontArm, f0.x + facing * 0.25f * Reach(FrontArm), f0.y + 0.85f * Reach(FrontArm));
+            Vector3 bUp = ArmPoint(BackArm, b0.x - facing * 0.25f * Reach(BackArm), b0.y + 0.85f * Reach(BackArm));
+            yield return ArmsMove(fUp, bUp, 0.35f, false);
+            float t = 0f;
             Shake(duration * 0.8f, 0.25f);
             SpawnBurst(60, 10f, 0.8f);
-            yield return new WaitForSeconds(duration);
+            while (t < duration * 0.7f)
+            {
+                Vector3 j = Random.insideUnitSphere * 0.08f * curScale;
+                ArmTo(FrontArm, fUp + j, 0.3f);
+                ArmTo(BackArm, bUp - j, 0.3f);
+                t += Time.deltaTime;
+                yield return null;
+            }
+            yield return ArmsMove(RestPlant(FrontArm), RestPlant(BackArm), 0.12f, true);
+            Impact(HandPos(FrontArm), 0.3f);
+            Impact(HandPos(BackArm), 0f);
+            ReleaseArms();
             ResetPose();
             yield return new WaitForSeconds(0.3f);
         }
 
-        // Passage à la phase suivante : ralenti, bannière, retraite, rugissement
+        // Passage à la phase suivante : ralenti, bannière, recul, rugissement
         private IEnumerator PhaseTransition()
         {
             invulnerable = true;
+            ReleaseArms();
             ResetPose();
             // Laisse finir l'arrêt du temps de la parade du joueur
             yield return new WaitForSecondsRealtime(0.12f);
@@ -392,12 +402,12 @@ namespace ParryEverything.Boss
             yield return new WaitForSecondsRealtime(0.7f);
             TimeControl.SetEffectScale(1f);
 
-            // Recule au centre de l'arène
+            // Recule en rampant
             float t = 0f;
-            while (t < 0.7f && target != null)
+            while (t < 0.9f && target != null)
             {
                 float side = target.transform.position.x < transform.position.x ? 1f : -1f;
-                MoveToward(target.transform.position.x + side * preferredDistance, HoverY() + 0.8f * curScale, 2f);
+                MoveToward(target.transform.position.x + side * preferredDistance, HoverY(), 2f);
                 t += Time.deltaTime;
                 yield return null;
             }
@@ -407,15 +417,11 @@ namespace ParryEverything.Boss
 
         private void ResetPose()
         {
-            sharpness = 8f;
-            weaponTarget = 25f;
-            tiltTarget = 6f;
-            handRaiseTarget = 0f;
-            glowTarget = 0f;
+            tiltTarget = 4f;
             lockFacing = false;
         }
 
-        // Se replace à bonne distance du joueur
+        // Se replace à bonne distance du joueur, en rampant
         private IEnumerator Reposition(float duration)
         {
             float t = 0f;
@@ -431,200 +437,164 @@ namespace ParryEverything.Boss
             }
         }
 
-        // ---------- Faux ----------
-        private IEnumerator Swing()
+        // Rampe jusqu'à ce que le joueur soit à 'distance' (ou au bout de 'timeout')
+        private IEnumerator CrawlInRange(float distance, float timeout)
         {
-            // Approche : se place pour que l'arc de la faux passe sur le joueur
             float t = 0f;
-            while (t < 1.5f && target != null)
+            while (t < timeout && target != null && !dead)
             {
-                Vector3 goal = SwingSpot();
-                if (Vector2.Distance(transform.position, goal) < 0.4f) break;
-                MoveToward(goal.x, goal.y, 2.5f);
+                float dx = target.transform.position.x - transform.position.x;
+                if (Mathf.Abs(dx) <= distance) break;
+                MoveToward(target.transform.position.x - Mathf.Sign(dx) * distance * 0.85f, HoverY(), 1.6f);
                 t += Time.deltaTime;
                 yield return null;
             }
-
-            // Combo : 1 coup, 2 en phase IV, 3 en phase V
-            int swings = phase >= 4 ? 3 : (phase >= 3 ? 2 : 1);
-            for (int s = 0; s < swings && !dead; s++)
-            {
-                bool parried = false;
-                yield return OneSwing(s == 0 ? swingWindup : swingWindup * 0.5f, r => parried = r);
-                if (parried)
-                {
-                    TakeHit(swingParryDamage);
-                    if (phaseChanged || dead) yield break;
-                    yield return Stagger();
-                    yield break;
-                }
-            }
-            yield return new WaitForSeconds(0.25f);
-            ResetPose();
         }
 
-        private IEnumerator OneSwing(float windup, System.Action<bool> result)
+        // ---------- Frappe d'une main (phase I+ ; combo de 2 en IV, 3 en V) ----------
+        // La main se dresse au-dessus du joueur (elle le suit), tremble, puis s'abat. Phase II+ : onde de choc.
+        private IEnumerator Slap()
         {
-            // Armement : faux levée au-dessus de l'épaule, corps en arrière, œil allumé
-            lockFacing = false;
-            sharpness = 7f;
-            weaponTarget = 80f;
-            tiltTarget = -10f;
-            glowTarget = 1.5f;
-            // Pendant l'armement, il continue de suivre le joueur pour rester à portée
-            float w = 0f;
-            while (w < windup / Spd)
+            yield return CrawlInRange(Reach(FrontArm) * 0.75f, 1.5f);
+            int slaps = phase >= 4 ? 3 : (phase >= 3 ? 2 : 1);
+            for (int s = 0; s < slaps && !dead && target != null; s++)
             {
-                // Tension qui monte : la faux recule encore un peu, le corps se cabre
-                float u = w / (windup / Spd);
-                weaponTarget = Mathf.Lerp(80f, 102f, u * u);
-                tiltTarget = Mathf.Lerp(-8f, -17f, u);
-                if (target != null)
+                int arm = s % 2 == 0 ? FrontArm : BackArm;
+                float windup = (s == 0 ? swingWindup : swingWindup * 0.6f) / Spd;
+                lockFacing = false;
+                tiltTarget = -8f;
+                float w = 0f;
+                Vector3 up = HandPos(arm);
+                while (w < windup)
                 {
-                    Vector3 goal = SwingSpot();
-                    MoveToward(goal.x, goal.y, 2.5f);
+                    float u = w / windup;
+                    // Main dressée haut au-dessus de l'épaule, coude plié, penchée vers le joueur
+                    Vector3 sh = ShoulderPos(arm);
+                    float r = Reach(arm);
+                    float toward = Mathf.Clamp((target.transform.position.x - sh.x) / r, -0.35f, 0.35f);
+                    Vector3 goal = ArmPoint(arm, sh.x + toward * r, sh.y + (0.5f + 0.12f * u) * r);
+                    up = Vector3.Lerp(up, goal, 1f - Mathf.Exp(-14f * Time.deltaTime));
+                    ArmTo(arm, up + Random.insideUnitSphere * 0.04f * u * curScale, 0.5f);
+                    w += Time.deltaTime;
+                    yield return null;
                 }
-                w += Time.deltaTime;
-                yield return null;
-            }
-            moveVel = Vector3.zero;
 
-            // Coup : arc rapide vers l'avant et le bas, avec une fente du corps vers le joueur
-            lockFacing = true;
-            ResetBladeSweep();
-            sharpness = 30f * Spd;
-            weaponTarget = -110f;
-            tiltTarget = 24f;
-            Shake(0.15f, 0.08f);
-            float lungeDir = facing;
-            float lunge = LungeDist();
-            bool hasHit = false;
-            bool slashed = phase < 1;
-            float t = 0f;
-            while (t < 0.35f)
-            {
-                // Fente : rapide puis freinée (sur 0,12 s)
-                float u0 = Mathf.Clamp01(t / 0.12f), u1 = Mathf.Clamp01((t + Time.deltaTime) / 0.12f);
-                float e0 = 1f - (1f - u0) * (1f - u0), e1 = 1f - (1f - u1) * (1f - u1);
-                transform.position += new Vector3(lungeDir * lunge * (e1 - e0), 0f, 0f);
-                // Phase II+ : la faux libère un croissant de feu au ras du sol
-                if (!slashed && t > 0.08f)
+                // S'abat sur le joueur (aussi loin que le bras porte) : rapide, accélérée ; testée sur tout son trajet
+                lockFacing = true;
+                tiltTarget = 12f;
+                Vector3 from = up;
+                Vector3 shoulder = ShoulderPos(arm);
+                float reach = Reach(arm);
+                float strikeX = shoulder.x + Mathf.Clamp(target.transform.position.x - shoulder.x, -reach * 0.85f, reach * 0.85f);
+                Vector3 to = ArmPoint(arm, strikeX, groundY + 0.15f * curScale);
+                Vector3 prev = HandPos(arm);
+                float dur = 0.11f / Spd;
+                bool hasHit = false;
+                float t = 0f;
+                while (t < dur)
                 {
-                    slashed = true;
-                    Vector3 g = new Vector3(transform.position.x + lungeDir * 1.2f * curScale, groundY, 0f);
-                    BossProjectile.SpawnSlash(g, lungeDir, slashSpeed * Spd, slashDamage * Dmg, this, PhaseColor(), 1.5f + phase * 0.15f);
-                }
-                if (!hasHit && BladeTouchesPlayer(out Vector3 point))
-                {
-                    hasHit = true;
-                    if (!target.TakeDamage(swingDamage * Dmg, transform, point))
+                    float u = Mathf.Clamp01(t / dur);
+                    ArmTo(arm, Vector3.LerpUnclamped(from, to, u * u), 1f);
+                    yield return null;
+                    Vector3 cur = HandPos(arm);
+                    if (!hasHit && SweepTouchesPlayer(prev, cur, hitRadius + 0.3f * curScale, out Vector3 point))
                     {
-                        ResetPose();
-                        result(true);
+                        hasHit = true;
+                        if (!target.TakeDamage(swingDamage * Dmg, transform, point))
+                        {
+                            TakeHit(swingParryDamage);
+                            if (phaseChanged || dead) yield break;
+                            ReleaseArms();
+                            yield return Stagger();
+                            yield break;
+                        }
+                    }
+                    prev = cur;
+                    t += Time.deltaTime;
+                }
+                ArmTo(arm, to, 1f);
+                Impact(to, 0.25f);
+                // Au sol : le joueur juste à côté de la main est pris aussi
+                if (!hasHit && NearGround(to.x, 0.9f * curScale, 1.2f * curScale, out Vector3 near))
+                {
+                    if (!target.TakeDamage(swingDamage * Dmg, transform, near))
+                    {
+                        TakeHit(swingParryDamage);
+                        if (phaseChanged || dead) yield break;
+                        ReleaseArms();
+                        yield return Stagger();
                         yield break;
                     }
                 }
-                t += Time.deltaTime;
-                yield return null;
+                if (phase >= 1)
+                {
+                    float dir = Mathf.Sign(target.transform.position.x - to.x);
+                    if (dir == 0f) dir = facing;
+                    BossProjectile.SpawnShockwave(new Vector3(to.x + dir * 0.6f, groundY, 0f), dir, shockwaveSpeed * Spd, shockwaveDamage * Dmg, this, PhaseColor(), 1.1f, ProjectileLook.Rock());
+                }
+                yield return new WaitForSeconds(0.18f / Spd);
+                ArmRelease(arm);
             }
-            glowTarget = 0f;
-            sharpness = 8f;
+            yield return new WaitForSeconds(0.2f);
+            ResetPose();
         }
 
-        // Chancelle après une parade : recule en titubant
+        // Chancelle après une parade : le bol tangue en arrière et glisse
         private IEnumerator Stagger()
         {
             lockFacing = true;
-            sharpness = 12f;
-            weaponTarget = 60f;
-            tiltTarget = -25f;
-            glowTarget = 0f;
+            ReleaseArms();
+            tiltTarget = -22f;
             tiltVel -= 220f;     // encaisse le choc
-            weaponVel += 300f;
             float t = 0f;
-            float v = -facing * 9f;
+            float v = -facing * 7f;
             while (t < staggerDuration && !dead)
             {
                 transform.position += new Vector3(v * Time.deltaTime, 0f, 0f);
-                v *= Mathf.Exp(-7f * Time.deltaTime);   // glisse puis s'arrête
+                v *= Mathf.Exp(-6f * Time.deltaTime);   // glisse puis s'arrête
                 t += Time.deltaTime;
                 yield return null;
             }
             ResetPose();
         }
-
-        // Position du boss pour que le joueur soit sur l'arc de la faux :
-        // la main est placée devant le joueur et au-dessus, à une distance égale au rayon de la lame.
-        private Vector3 SwingSpot()
-        {
-            Vector3 pp = target.transform.position;
-            float side = pp.x < transform.position.x ? 1f : -1f;   // côté où se trouve le boss
-            float r = BladeRadius();
-            // La fente du coup rapproche le boss : on se place d'autant plus loin
-            Vector3 hand = new Vector3(pp.x + side * (r * 0.8f + LungeDist()), pp.y + r * 0.55f, 0f);
-            // Main prévue en fin de frappe (elle bouge avec la faux), côté joueur
-            Vector3 hl = HandLocal(-90f, 20f);
-            float yr = turnToCamera * Mathf.Deg2Rad;
-            Vector3 handOffset = new Vector3(-side * (hl.x * Mathf.Cos(yr) + hl.z * Mathf.Sin(yr)) * curScale, hl.y * curScale, 0f);
-            return new Vector3(hand.x - handOffset.x, hand.y - handOffset.y, 0f);
-        }
-
-        // Distance moyenne main → tranchant, en unités du monde
-        private float BladeRadius()
-        {
-            float sum = 0f;
-            for (int i = 0; i < bladePoints.Count; i++) sum += bladePoints[i].magnitude;
-            return sum / Mathf.Max(1, bladePoints.Count) * curScale * bladeScale * 0.9f;
-        }
-
-        private float LungeDist() { return 0.9f * curScale; }
 
         // Point visé avec anticipation : là où le joueur sera quand le projectile arrivera
         private Vector3 Lead(Vector3 from, float speed, float amount)
         {
-            Vector3 pp = target.transform.position;
+            Vector3 pp = target.HitCenter;          // le corps, pas les pieds
             float time = Vector2.Distance(from, pp) / Mathf.Max(speed, 0.1f);
             Vector3 p = pp + new Vector3(playerVel.x, playerVel.y * 0.3f, 0f) * time * amount;
             p.y = Mathf.Max(p.y, groundY + 0.3f);
             return p;
         }
 
-        // Balayage de la lame : chaque point du tranchant est testé sur tout son trajet depuis l'image précédente,
-        // contre toute la hauteur du joueur (pieds, centre, tête)
-        private Vector3[] prevBlade;
-
-        private void ResetBladeSweep()
+        // Le segment parcouru par la main (a → b) touche-t-il le joueur (bas, centre, haut du corps) ?
+        private bool SweepTouchesPlayer(Vector3 a, Vector3 b, float radius, out Vector3 point)
         {
-            if (prevBlade == null || prevBlade.Length != bladePoints.Count) prevBlade = new Vector3[bladePoints.Count];
-            for (int i = 0; i < bladePoints.Count; i++) prevBlade[i] = weaponPivot.TransformPoint(bladePoints[i]);
+            point = b;
+            if (target == null) return false;
+            Vector2 pc = target.HitCenter;
+            Vector2[] body = { pc, pc + Vector2.up * 0.5f, pc - Vector2.up * 0.5f };
+            foreach (Vector2 p in body)
+            {
+                if (DistToSegment(p, a, b) < radius)
+                {
+                    point = Vector3.Lerp(b, (Vector3)p, 0.5f);
+                    return true;
+                }
+            }
+            return false;
         }
 
-        private bool BladeTouchesPlayer(out Vector3 point)
+        // Le joueur est-il au sol près de x (à moins de 'width' et sous 'height') ?
+        private bool NearGround(float x, float width, float height, out Vector3 point)
         {
-            point = Vector3.zero;
+            point = new Vector3(x, groundY, 0f);
             if (target == null) return false;
-            if (prevBlade == null || prevBlade.Length != bladePoints.Count) ResetBladeSweep();
-            Vector2 pc = target.transform.position;
-            Vector2[] body = { pc, pc + Vector2.up * 0.5f, pc - Vector2.up * 0.5f };
-            bool hit = false;
-            for (int i = 0; i < bladePoints.Count; i++)
-            {
-                Vector3 cur = weaponPivot.TransformPoint(bladePoints[i]);
-                if (!hit)
-                {
-                    foreach (Vector2 b in body)
-                    {
-                        if (DistToSegment(b, prevBlade[i], cur) < hitRadius + 0.1f * curScale)
-                        {
-                            point = cur;
-                            hit = true;
-                            break;
-                        }
-                    }
-                }
-                prevBlade[i] = cur;
-            }
-            return hit;
+            Vector3 pp = target.transform.position;
+            if (Mathf.Abs(pp.x - x) > width || pp.y - groundY > height) return false;
+            point = new Vector3(Mathf.Lerp(x, pp.x, 0.5f), pp.y, 0f);
+            return true;
         }
 
         private static float DistToSegment(Vector2 p, Vector2 a, Vector2 b)
@@ -634,86 +604,231 @@ namespace ParryEverything.Boss
             return Vector2.Distance(p, a + ab * t);
         }
 
-        // ---------- Orbes ----------
-        private IEnumerator Orbs()
-        {
-            handRaiseTarget = 1f;
-            glowTarget = 1.2f;
-            yield return new WaitForSeconds(0.5f / Spd);
+        // ---------- Lancer (cailloux ; morceaux du bol en phase V) ----------
+        // Main qui lance : la main avant (côté joueur) ; l'autre reste plantée derrière, en appui.
+        private const int ThrowArm = JarVisual.Front;
+        private const int OtherArm = JarVisual.Back;
+        private readonly int[] reservedShard = { -1, -1 };
 
-            int n = orbCount + phase;
-            for (int i = 0; i < n && !dead; i++)
+        // Apparence du prochain projectile de la main 'arm' : caillou ; en phase V, un vrai morceau du bol posé
+        // au sol à portée de main (réservé ici, ramassé par Scoop) ; s'il n'y en a plus à portée, un caillou.
+        private ProjectileLook Look(int arm)
+        {
+            reservedShard[arm] = -1;
+            if (phase >= 4 && jar != null)
             {
-                if (target != null)
+                int id = jar.FindShard(ShoulderPos(arm), Reach(arm) * 0.9f, reservedShard[1 - arm]);
+                if (id >= 0)
                 {
-                    Vector3 from = backHand.position;
-                    from.z = 0f;
+                    reservedShard[arm] = id;
+                    return ProjectileLook.Shard(jar.ShardMesh(id), jar.PotteryMaterial);
+                }
+            }
+            return ProjectileLook.Rock();
+        }
+
+        // Projectile qui ne passe pas par la main (pluie de pierres) : copie d'un morceau en phase V
+        private ProjectileLook LookCopy()
+        {
+            if (phase >= 4 && jar != null)
+                return ProjectileLook.Shard(jar.RandomShardMesh(), jar.PotteryMaterial);
+            return ProjectileLook.Rock();
+        }
+
+        // Ramasse : la main va au sol en arc (sur le morceau réservé en phase V), fouille, et en ressort avec le projectile
+        private IEnumerator Scoop(int arm, ProjectileLook look, float size, float speed)
+        {
+            int id = reservedShard[arm];
+            bool shard = jar != null && jar.ShardAvailable(id);
+            Vector3 g;
+            if (shard)
+            {
+                g = jar.ShardPosition(id);
+                g.y = RestPlant(arm).y;
+            }
+            else
+            {
+                g = RestPlant(arm);
+                g.x = Mathf.Lerp(g.x, transform.position.x, 0.35f);
+            }
+            tiltTarget = 8f;
+            yield return ArmArc(arm, g, 0.22f / speed, 0.18f * Reach(arm), 1f);
+            Impact(g, 0f, 8);
+            reservedShard[arm] = -1;
+            if (jar != null)
+            {
+                if (shard) jar.TakeShard(id);
+                Material m = Track(look.CreateMaterial());
+                jar.Hold(arm, look.Mesh(), m, look.Scale(size));
+            }
+            yield return new WaitForSeconds(0.06f / speed);
+        }
+
+        // Lancer d'un seul geste : ramène le projectile contre l'épaule en armant le bras au-dessus du bol (le bol
+        // se penche en arrière), un court élan qui tremble (signal), puis coup de fouet par-dessus l'épaule.
+        private IEnumerator WindAndThrow(int arm, float speed, System.Action<Vector3> release)
+        {
+            Vector3 start = HandPos(arm);
+            tiltTarget = -10f;
+            yield return ArmPath(arm, 0.3f / speed, e => Curve(e, start, ShoulderRel(arm, 0.15f, 0.12f), ShoulderRel(arm, -0.38f, 0.45f)), Smooth, 0f);
+            float hold = 0.12f / speed;
+            float t = 0f;
+            while (t < hold)
+            {
+                float u = t / hold;
+                ArmTo(arm, ShoulderRel(arm, -0.38f - 0.05f * u, 0.45f) + Random.insideUnitSphere * 0.015f * curScale * u, 0f);
+                t += Time.deltaTime;
+                yield return null;
+            }
+            yield return Whip(arm, speed, release, true);
+        }
+
+        // Coup de fouet : la main part de là où elle est (armée), lâche le projectile devant l'épaule, continue
+        // et retombe au sol devant le bol ; le bol bascule en avant. overhead : passe d'abord au-dessus de l'épaule.
+        private IEnumerator Whip(int arm, float speed, System.Action<Vector3> release, bool overhead)
+        {
+            Vector3 start = HandPos(arm);
+            tiltTarget = 14f;
+            tiltVel += 60f;
+            System.Func<float, Vector3> path = overhead
+                ? (System.Func<float, Vector3>)(e => Curve(e, start, ShoulderRel(arm, 0.02f, 0.62f), ShoulderRel(arm, 0.48f, 0.3f), GroundAhead(arm)))
+                : (e => Curve(e, start, ShoulderRel(arm, 0.48f, 0.3f), GroundAhead(arm)));
+            yield return ArmPath(arm, (overhead ? 0.28f : 0.22f) / speed, path, Smooth, 0f, overhead ? 2f / 3f : 0.5f, () =>
+            {
+                if (release != null) release(ReleaseFrom(arm));
+            });
+            ArmTo(arm, GroundAhead(arm), 1f);
+            Impact(GroundAhead(arm), 0f, 6);
+        }
+
+        private IEnumerator ThrowRocks()
+        {
+            int n = orbCount + phase;
+            for (int i = 0; i < n && !dead && target != null; i++)
+            {
+                ProjectileLook look = Look(ThrowArm);
+                float size = 0.7f + phase * 0.06f;
+                int k = i;
+                yield return Scoop(ThrowArm, look, size, Spd);
+                yield return WindAndThrow(ThrowArm, Spd, from =>
+                {
                     Vector3 dir = Lead(from, orbSpeed * Spd, 0.7f) - from;
                     dir.z = 0f;
-                    // Éventail autour du joueur, plus large au fil des phases
-                    dir = Quaternion.Euler(0f, 0f, (i - (n - 1) / 2f) * (5f + phase * 2f)) * dir;
-                    BossProjectile.SpawnOrb(from, dir, orbSpeed * Spd, orbDamage * Dmg, orbReflectDamage, this, PhaseColor(), 0.7f + phase * 0.06f);
-                    punch = 1f;
-                }
-                yield return new WaitForSeconds(0.42f / Spd);
+                    // Léger éventail autour du joueur, plus large au fil des phases
+                    dir = Quaternion.Euler(0f, 0f, (k % 2 == 0 ? 1f : -1f) * k * (1.5f + phase * 0.8f)) * dir;
+                    BossProjectile.SpawnOrb(from, dir, orbSpeed * Spd, orbDamage * Dmg, orbReflectDamage, this, PhaseColor(), size, look);
+                });
+                yield return new WaitForSeconds(0.08f / Spd);
             }
+            ArmRelease(ThrowArm);
             yield return new WaitForSeconds(0.3f);
             ResetPose();
         }
 
-        // ---------- Écrasement ----------
+        // ---------- Gestes du bras : chemins lisses ----------
+
+        // Point dans le plan du bras, relatif à l'épaule : fx vers l'avant (côté joueur), fy vers le haut (× portée)
+        private Vector3 ShoulderRel(int arm, float fx, float fy)
+        {
+            Vector3 s = ShoulderPos(arm);
+            float r = Reach(arm);
+            return ArmPoint(arm, s.x + facing * fx * r, s.y + fy * r);
+        }
+
+        // Main posée au sol un peu devant sa place de repos
+        private Vector3 GroundAhead(int arm)
+        {
+            Vector3 g = RestPlant(arm);
+            g.x += facing * 0.1f * Reach(arm);
+            return g;
+        }
+
+        private static float Smooth(float u) => u * u * (3f - 2f * u);
+
+        // Courbe qui passe par tous les points (Catmull-Rom), u de 0 à 1
+        private static Vector3 Curve(float u, params Vector3[] p)
+        {
+            int n = p.Length - 1;
+            float f = Mathf.Clamp01(u) * n;
+            int i = Mathf.Min((int)f, n - 1);
+            float t = f - i;
+            Vector3 p0 = p[Mathf.Max(i - 1, 0)], p1 = p[i], p2 = p[i + 1], p3 = p[Mathf.Min(i + 2, n)];
+            return 0.5f * (2f * p1 + (p2 - p0) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * (t * t) + (3f * p1 - p0 - 3f * p2 + p3) * (t * t * t));
+        }
+
+        // La main suit un chemin recalculé à chaque image (il suit le corps qui bouge). ease : temps → avancée.
+        // release : appelé une fois quand l'avancée dépasse releaseAt (ou à la fin).
+        private IEnumerator ArmPath(int arm, float duration, System.Func<float, Vector3> path, System.Func<float, float> ease, float flatHand,
+            float releaseAt = 2f, System.Action release = null)
+        {
+            float t = 0f;
+            bool released = false;
+            while (true)
+            {
+                float u = duration > 0f ? Mathf.Clamp01(t / duration) : 1f;
+                float e = ease(u);
+                ArmTo(arm, path(e), flatHand);
+                if (!released && e >= releaseAt)
+                {
+                    released = true;
+                    if (release != null) release();
+                }
+                if (u >= 1f) break;
+                t += Time.deltaTime;
+                yield return null;
+            }
+            if (!released && release != null) release();
+        }
+
+        // De la main actuelle à 'to' en arc
+        private IEnumerator ArmArc(int arm, Vector3 to, float duration, float height, float flatHand)
+        {
+            Vector3 from = HandPos(arm);
+            yield return ArmPath(arm, duration, e => Vector3.Lerp(from, to, e) + Vector3.up * Mathf.Sin(e * Mathf.PI) * height, Smooth, flatHand);
+        }
+
+        // ---------- Écrasement à deux mains (phase II+) ----------
+        // S'approche, dresse les deux mains (la main avant au-dessus du joueur), puis les abat : ondes de choc.
         private IEnumerator Slam()
         {
             if (target == null) yield break;
-
-            // Monte au-dessus du joueur
-            weaponTarget = 85f;
-            glowTarget = 1.5f;
+            yield return CrawlInRange(Reach(FrontArm) * 0.6f, 1.4f);
+            tiltTarget = -12f;
             float t = 0f;
-            while (t < 0.8f)
-            {
-                MoveToward(target.transform.position.x, HoverY() + 2.5f * curScale, 3f);
-                t += Time.deltaTime;
-                yield return null;
-            }
-            // Suspendu : signal ; il suit encore le joueur, puis se fige juste avant de tomber
-            tiltTarget = 15f;
-            flash = 0.4f;
-            t = 0f;
-            float hang = 0.45f / Spd;
+            float hang = 0.75f / Spd;
+            Vector3 fUp = HandPos(FrontArm), bUp = HandPos(BackArm);
             while (t < hang)
             {
-                if (t < hang - 0.15f) MoveToward(target.transform.position.x + playerVel.x * 0.15f, HoverY() + 2.5f * curScale, 4f);
+                Vector3 fs = ShoulderPos(FrontArm), bs = ShoulderPos(BackArm);
+                float fr = Reach(FrontArm), br = Reach(BackArm);
+                float toward = Mathf.Clamp((target.transform.position.x - fs.x) / fr, -0.45f, 0.45f);
+                // Il suit encore le joueur, puis se fige juste avant de frapper
+                if (t < hang - 0.15f) fUp = Vector3.Lerp(fUp, ArmPoint(FrontArm, fs.x + toward * fr, fs.y + 0.55f * fr), 1f - Mathf.Exp(-10f * Time.deltaTime));
+                Vector3 bGoal = ArmPoint(BackArm, bs.x - facing * 0.25f * br, bs.y + 0.55f * br);
+                bUp = Vector3.Lerp(bUp, bGoal, 1f - Mathf.Exp(-10f * Time.deltaTime));
+                float tremble = t / hang;
+                ArmTo(FrontArm, fUp + Random.insideUnitSphere * 0.05f * tremble * curScale, 0.5f);
+                ArmTo(BackArm, bUp + Random.insideUnitSphere * 0.05f * tremble * curScale, 0.5f);
                 t += Time.deltaTime;
                 yield return null;
             }
-            moveVel = Vector3.zero;
-
-            // Chute
-            Vector3 start = transform.position;
-            Vector3 end = new Vector3(start.x, groundY + 1.4f * curScale, 0f);
-            sharpness = 30f;
-            weaponTarget = -90f;
-            t = 0f;
-            while (t < 0.14f)
-            {
-                float u = t / 0.14f;
-                transform.position = Vector3.Lerp(start, end, u * u);
-                t += Time.deltaTime;
-                yield return null;
-            }
-            transform.position = end;
-            moveVel = Vector3.zero;
+            flash = 0.4f;
+            lockFacing = true;
+            tiltTarget = 14f;
+            // La main avant s'abat sur le joueur (aussi loin qu'elle porte), l'autre derrière le bol
+            Vector3 fsh = ShoulderPos(FrontArm);
+            float fx = fsh.x + Mathf.Clamp(target.transform.position.x - fsh.x, -Reach(FrontArm) * 0.85f, Reach(FrontArm) * 0.85f);
+            Vector3 fTo = ArmPoint(FrontArm, fx, groundY + 0.15f * curScale);
+            Vector3 bTo = ArmPoint(BackArm, bUp.x - facing * 0.3f * Reach(BackArm), groundY + 0.15f * curScale);
+            yield return ArmsMove(fTo, bTo, 0.12f / Spd, true);
             squashVel += 4f;
-            tiltVel += 120f;
-            Shake(0.4f, 0.3f);
-            SpawnBurst(40, 8f, 0.4f);
+            Impact(fTo, 0.35f, 40);
+            Impact(bTo, 0f, 20);
 
-            // Impact direct
-            Vector3 pp = target.transform.position;
-            if (Mathf.Abs(pp.x - end.x) < 1.6f * curScale && pp.y < end.y + 1f * curScale)
+            // Impact direct sous la main avant
+            if (NearGround(fTo.x, 1.3f * curScale, 1.4f * curScale, out Vector3 point))
             {
-                if (!target.TakeDamage(slamDamage * Dmg, transform, Vector3.Lerp(end, pp, 0.5f)))
+                if (!target.TakeDamage(slamDamage * Dmg, transform, point))
                 {
                     TakeHit(slamParryDamage);
                     if (phaseChanged || dead) yield break;
@@ -722,104 +837,119 @@ namespace ParryEverything.Boss
                 }
             }
 
-            // Ondes de choc des deux côtés (deux vagues en phase V)
+            // Ondes de choc depuis les deux mains, vers l'extérieur (plusieurs vagues aux phases avancées)
             int waves = phase >= 4 ? 3 : (phase >= 2 ? 2 : 1);
             for (int w = 0; w < waves; w++)
             {
-                Vector3 ground = new Vector3(end.x, groundY, 0f);
-                BossProjectile.SpawnShockwave(ground + Vector3.right * 0.8f, 1f, shockwaveSpeed * Spd, shockwaveDamage * Dmg, this, PhaseColor(), 1.35f);
-                BossProjectile.SpawnShockwave(ground - Vector3.right * 0.8f, -1f, shockwaveSpeed * Spd, shockwaveDamage * Dmg, this, PhaseColor(), 1.35f);
-                if (w < waves - 1) yield return new WaitForSeconds(0.45f);
+                float out1 = Mathf.Sign(fTo.x - transform.position.x);
+                float out2 = Mathf.Sign(bTo.x - transform.position.x);
+                BossProjectile.SpawnShockwave(new Vector3(fTo.x + out1 * 0.6f, groundY, 0f), out1, shockwaveSpeed * Spd, shockwaveDamage * Dmg, this, PhaseColor(), 1.35f, ProjectileLook.Rock());
+                BossProjectile.SpawnShockwave(new Vector3(bTo.x + out2 * 0.6f, groundY, 0f), out2, shockwaveSpeed * Spd, shockwaveDamage * Dmg, this, PhaseColor(), 1.35f, ProjectileLook.Rock());
+                if (w < waves - 1)
+                {
+                    // Les mains se relèvent un peu et refrappent
+                    yield return ArmsMove(fTo + Vector3.up * 1.2f * curScale, bTo + Vector3.up * 1.2f * curScale, 0.18f / Spd, true);
+                    yield return ArmsMove(fTo, bTo, 0.08f / Spd, true);
+                    Impact(fTo, 0.2f, 15);
+                    Impact(bTo, 0f, 10);
+                }
             }
-
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(0.4f);
+            ReleaseArms();
             ResetPose();
-            t = 0f;
-            while (t < 0.6f)
-            {
-                MoveToward(transform.position.x, HoverY(), 1.5f);
-                t += Time.deltaTime;
-                yield return null;
-            }
         }
 
-        // ---------- Météores (phase III+) ----------
-        private IEnumerator MeteorRain()
+        // ---------- Pluie de pierres (phase III+) ----------
+        // Lance des poignées de pierres vers le ciel ; elles retombent sur les zones marquées.
+        private IEnumerator RockRain()
         {
             if (target == null) yield break;
-            // Lève les bras vers le ciel
-            handRaiseTarget = 1f;
-            weaponTarget = 95f;
-            tiltTarget = -15f;
-            glowTarget = 2.5f;
-            Shake(0.6f, 0.12f);
-            yield return new WaitForSeconds(0.6f / Spd);
-
             int n = meteorCount + 2 + (phase >= 4 ? 3 : 0);
-            for (int i = 0; i < n && !dead; i++)
+            int throws = 3;
+            int done = 0;
+            for (int k = 0; k < throws && !dead; k++)
             {
-                // Le premier vise le joueur, les autres tombent autour
-                float x = target.transform.position.x + (i == 0 ? playerVel.x * 0.75f / Spd : Random.Range(-6f, 6f));
-                BossProjectile.SpawnMeteor(x, groundY, 0.75f / Spd, 16f, meteorDamage * Dmg, meteorReflectDamage, this, PhaseColor());
-                yield return new WaitForSeconds(0.28f / Spd);
+                ProjectileLook look = Look(ThrowArm);
+                yield return Scoop(ThrowArm, look, 0.95f, Spd);
+                // Jet vers le haut : s'accroupit (main basse, en arrière), puis lance vers le ciel et la main retombe
+                Vector3 start = HandPos(ThrowArm);
+                tiltTarget = -6f;
+                yield return ArmPath(ThrowArm, 0.2f / Spd, e => Curve(e, start, ShoulderRel(ThrowArm, -0.1f, 0.05f), ShoulderRel(ThrowArm, -0.22f, 0.15f)), Smooth, 0f);
+                tiltTarget = -16f;
+                tiltVel -= 50f;
+                yield return ArmPath(ThrowArm, 0.14f / Spd, e => Curve(e, ShoulderRel(ThrowArm, -0.22f, 0.15f), ShoulderRel(ThrowArm, 0f, 0.6f), ShoulderRel(ThrowArm, 0.12f, 0.92f)),
+                    u => u * u, 0f, 0.9f, () => { if (jar != null) jar.ReleaseHeld(ThrowArm); });
+                Shake(0.15f, 0.06f);
+                StartCoroutine(ArmArc(ThrowArm, GroundAhead(ThrowArm), 0.3f / Spd, 0f, 1f));
+                int batch = (n - done) / (throws - k);
+                for (int i = 0; i < batch && !dead; i++, done++)
+                {
+                    // La première vise le joueur, les autres tombent autour
+                    float x = target.transform.position.x + (done == 0 ? playerVel.x * 0.75f / Spd : Random.Range(-6f, 6f));
+                    BossProjectile.SpawnMeteor(x, groundY, (0.75f + i * 0.12f) / Spd, 16f, meteorDamage * Dmg, meteorReflectDamage, this, PhaseColor(), i == 0 ? look : LookCopy());
+                }
+                yield return new WaitForSeconds(0.3f / Spd);
             }
+            ArmRelease(ThrowArm);
             yield return new WaitForSeconds(0.6f);
             ResetPose();
         }
 
-        // ---------- Charge (phase IV+) ----------
-        private IEnumerator Dash()
+        // ---------- Bond (phase IV+ ; deux bonds en V) ----------
+        // Plante les mains derrière lui, se ramasse, puis se propulse en un bond par-dessus / sur le joueur.
+        private IEnumerator Leap()
         {
             if (target == null) yield break;
-
-            // Se place à distance, à hauteur du joueur
             float side = target.transform.position.x < transform.position.x ? 1f : -1f;
-            float y = groundY + 1.5f * curScale;
             float t = 0f;
             while (t < 0.9f)
             {
-                MoveToward(target.transform.position.x + side * 8f, y, 2f);
+                MoveToward(target.transform.position.x + side * 7f, HoverY(), 2f);
                 t += Time.deltaTime;
                 yield return null;
             }
 
-            // Armement : se ramasse en arrière, faux pointée devant
-            weaponTarget = -20f;
-            tiltTarget = -20f;
-            glowTarget = 2.5f;
-            flash = 0.5f;
-            Shake(0.4f, 0.08f);
-            yield return new WaitForSeconds(0.55f / Spd);
-
-            // Charge à travers l'écran
+            // Armement : mains plantées derrière, bol qui se ramasse vers l'arrière
             lockFacing = true;
             float dir = facing;
-            tiltTarget = 30f;
-            weaponTarget = -70f;
-            sharpness = 20f;
-            float endX = target.transform.position.x + dir * 6f;
+            tiltTarget = -18f;
+            flash = 0.5f;
+            Shake(0.4f, 0.08f);
+            Vector3 fPlant = ArmPoint(FrontArm, transform.position.x - dir * 0.4f * Reach(FrontArm), groundY + 0.1f * curScale);
+            Vector3 bPlant = ArmPoint(BackArm, transform.position.x - dir * 0.75f * Reach(BackArm), groundY + 0.1f * curScale);
+            yield return ArmsMove(fPlant, bPlant, 0.3f / Spd, true);
+            squashVel -= 3f;
+            yield return new WaitForSeconds(0.3f / Spd);
+
+            // Bond : parabole jusqu'au-delà du joueur
+            tiltTarget = 22f;
             Vector3 start = transform.position;
-            Vector3 end = new Vector3(endX, y, 0f);
-            float dur = 0.4f / Spd;
-            ResetBladeSweep();
+            Vector3 end = new Vector3(target.transform.position.x + dir * 2.5f, HoverY(), 0f);
+            float dur = 0.6f / Spd;
+            float height = 2.6f * curScale;
             bool hasHit = false;
             t = 0f;
             while (t < dur)
             {
                 float u = t / dur;
-                transform.position = Vector3.Lerp(start, end, 1f - (1f - u) * (1f - u) * (1f - u));
-                if (!hasHit)
+                Vector3 p = Vector3.Lerp(start, end, u);
+                p.y += Mathf.Sin(u * Mathf.PI) * height;
+                transform.position = p;
+                // Les bras poussent puis traînent derrière, en l'air
+                Vector3 c = CorePosition;
+                ArmTo(FrontArm, ArmPoint(FrontArm, c.x - dir * 0.5f * Reach(FrontArm), c.y - 0.2f * Reach(FrontArm)), 0.3f);
+                ArmTo(BackArm, ArmPoint(BackArm, c.x - dir * 0.7f * Reach(BackArm), c.y + 0.1f * Reach(BackArm)), 0.3f);
+                if (!hasHit && target != null)
                 {
                     Vector3 pp = target.transform.position;
-                    bool body = new Vector2(pp.x - transform.position.x, pp.y - transform.position.y).magnitude < 1.4f * curScale;
-                    if (body || BladeTouchesPlayer(out _))
+                    if (new Vector2(pp.x - c.x, pp.y - c.y).magnitude < 1.3f * curScale)
                     {
                         hasHit = true;
-                        if (!target.TakeDamage(dashDamage * Dmg, transform, Vector3.Lerp(transform.position, pp, 0.5f)))
+                        if (!target.TakeDamage(dashDamage * Dmg, transform, Vector3.Lerp(c, pp, 0.5f)))
                         {
-                            moveVel = Vector3.zero;
                             TakeHit(dashParryDamage);
                             if (phaseChanged || dead) yield break;
+                            transform.position = new Vector3(p.x, HoverY(), 0f);
                             yield return Stagger();
                             yield break;
                         }
@@ -828,106 +958,356 @@ namespace ParryEverything.Boss
                 t += Time.deltaTime;
                 yield return null;
             }
+            transform.position = end;
             moveVel = Vector3.zero;
-            // Phase V : demi-tour immédiat et deuxième charge
-            if (phase >= 4 && !dead && !secondDash)
+            crawlWanted = false;
+            squashVel += 5f;
+            ReleaseArms();
+            Impact(new Vector3(end.x, groundY, 0f), 0.4f, 40);
+            // À l'atterrissage, petites ondes des deux côtés
+            BossProjectile.SpawnShockwave(new Vector3(end.x + 1.2f * curScale, groundY, 0f), 1f, shockwaveSpeed * Spd, shockwaveDamage * Dmg, this, PhaseColor(), 1f, ProjectileLook.Rock());
+            BossProjectile.SpawnShockwave(new Vector3(end.x - 1.2f * curScale, groundY, 0f), -1f, shockwaveSpeed * Spd, shockwaveDamage * Dmg, this, PhaseColor(), 1f, ProjectileLook.Rock());
+
+            // Phase V : demi-tour immédiat et deuxième bond
+            if (phase >= 4 && !dead && !secondLeap)
             {
-                secondDash = true;
+                secondLeap = true;
                 lockFacing = false;
-                yield return new WaitForSeconds(0.25f);
-                yield return Dash();
-                secondDash = false;
+                yield return new WaitForSeconds(0.3f);
+                yield return Leap();
+                secondLeap = false;
                 yield break;
             }
             yield return new WaitForSeconds(0.35f);
             ResetPose();
         }
-        private bool secondDash;
+        private bool secondLeap;
 
-        // ---------- Piliers de feu (phase II+) ----------
-        // Il plonge la faux dans le sol : une ligne de colonnes de feu jaillit jusqu'au joueur et au-delà
+        // ---------- Pics de roche (phase II+) ----------
+        // Il abat les deux mains devant lui : une ligne de pics de roche jaillit jusqu'au joueur et au-delà
         private IEnumerator Pillars()
         {
             if (target == null) yield break;
-            sharpness = 9f;
-            weaponTarget = 100f;
-            tiltTarget = -14f;
-            glowTarget = 2f;
-            yield return new WaitForSeconds(0.55f / Spd);
+            tiltTarget = -12f;
+            Vector3 f0 = ShoulderPos(FrontArm), b0 = ShoulderPos(BackArm);
+            yield return ArmsMove(ArmPoint(FrontArm, f0.x, f0.y + 0.8f * Reach(FrontArm)),
+                                  ArmPoint(BackArm, b0.x + facing * 0.3f * Reach(BackArm), b0.y + 0.8f * Reach(BackArm)), 0.5f / Spd, false);
 
-            // Frappe la faux au sol
+            // Frappe le sol devant lui
             lockFacing = true;
-            sharpness = 28f;
-            weaponTarget = -120f;
-            tiltTarget = 26f;
-            squashVel += 3f;
-            Shake(0.35f, 0.22f);
-            SpawnBurst(30, 7f, 0.4f);
-
+            tiltTarget = 20f;
             float dir = facing;
-            float start = transform.position.x + dir * 1.5f * curScale;
+            float hitX = transform.position.x + dir * 1.3f * curScale;
+            yield return ArmsMove(ArmPoint(FrontArm, hitX + dir * 0.3f * curScale, groundY + 0.15f * curScale),
+                                  ArmPoint(BackArm, hitX - dir * 0.1f * curScale, groundY + 0.15f * curScale), 0.1f / Spd, true);
+            squashVel += 3f;
+            Impact(new Vector3(hitX, groundY, 0f), 0.22f, 30);
+
+            // Motif répété le long des lignes : pic haut, pic bas (se saute), trou sûr.
+            // Toute l'attaque forme une seule salve : une parade réussie la neutralise entièrement.
+            float start = hitX + dir * 0.6f * curScale;
             float h = 5f + phase * 0.6f;
-            int n = 7 + phase;
             float spacing = 1.7f;
-            for (int i = 0; i < n && !dead; i++)
+            float delay = 0.5f / Spd;
+            float step = 0.1f / Spd;
+            int patternOffset = Random.Range(0, 3);
+            BossProjectile.PillarSalvo salvo = new BossProjectile.PillarSalvo();
+
+            // Phase IV+ : deux lignes convergent vers la position du joueur (l'une part du boss, l'autre de
+            // l'autre côté du joueur) et se rejoignent en un pic unique, à parer ou à fuir.
+            float meet = target.transform.position.x;
+            int lineSlots = Mathf.FloorToInt((meet - start) * dir / spacing);
+            if (phase >= 3 && lineSlots >= 1)
             {
-                BossProjectile.SpawnPillar(start + dir * i * spacing, groundY, 0.5f / Spd, pillarDamage * Dmg, this, PhaseColor(), h);
-                // Phase IV+ : deuxième ligne venant de l'autre côté du joueur
-                if (phase >= 3 && target != null)
-                    BossProjectile.SpawnPillar(target.transform.position.x + dir * (n - i) * spacing * 0.5f, groundY, 0.5f / Spd, pillarDamage * Dmg, this, PhaseColor(), h);
-                yield return new WaitForSeconds(0.1f / Spd);
+                const int farSlots = 4;                              // longueur de la ligne venue d'en face
+                int offset = Mathf.Max(0, farSlots - lineSlots);     // aligne les deux arrivées
+                int meetSlot = lineSlots + offset;
+                for (int s = 0; s <= meetSlot && !dead; s++)
+                {
+                    int k = meetSlot - s;   // distance au point de rencontre, en emplacements
+                    if (k == 0)
+                    {
+                        BossProjectile.SpawnPillar(meet, groundY, delay, pillarDamage * Dmg, this, PhaseColor(), h, false, salvo, ProjectileLook.Rock());
+                    }
+                    else
+                    {
+                        if (k <= lineSlots) SpawnPatternPillar(meet - dir * k * spacing, k, patternOffset, delay, h, salvo);
+                        if (k <= farSlots) SpawnPatternPillar(meet + dir * k * spacing, k, patternOffset, delay, h, salvo);
+                    }
+                    yield return new WaitForSeconds(step);
+                }
+            }
+            else
+            {
+                int n = 7 + phase;
+                for (int i = 0; i < n && !dead; i++)
+                {
+                    SpawnPatternPillar(start + dir * i * spacing, i, patternOffset, delay, h, salvo);
+                    yield return new WaitForSeconds(step);
+                }
             }
             yield return new WaitForSeconds(0.5f);
+            ReleaseArms();
             ResetPose();
         }
 
-        // ---------- Jugement (phase V) ----------
+        // Emplacement 'index' du motif : 0 = pic haut, 1 = pic bas, 2 = trou
+        private void SpawnPatternPillar(float x, int index, int patternOffset, float delay, float h, BossProjectile.PillarSalvo salvo)
+        {
+            int slot = (index + patternOffset) % 3;
+            if (slot == 2) return;
+            BossProjectile.SpawnPillar(x, groundY, delay, pillarDamage * Dmg, this, PhaseColor(), h, slot == 1, salvo, ProjectileLook.Rock());
+        }
+
+        // ---------- Jugement (phase II+) : gros rocher échangé ----------
         private IEnumerator Judgment()
         {
             if (target == null) yield break;
-
-            // Monte et charge une énorme orbe au-dessus de sa tête
-            handRaiseTarget = 1f;
-            weaponTarget = 95f;
-            tiltTarget = -12f;
-            float t = 0f;
-            while (t < 1.4f)
+            ProjectileLook look = Look(ThrowArm);
+            yield return ChargeExchange(1.4f, look, 1.3f);
+            yield return Whip(ThrowArm, 1f, from =>
             {
-                MoveToward(transform.position.x, HoverY() + 1.5f * curScale, 1f);
-                glowTarget = 1f + t * 2f;
-                if (Random.value < 0.15f) Shake(0.1f, 0.06f + t * 0.05f);
-                t += Time.deltaTime;
-                yield return null;
-            }
-            Vector3 from = backHand.position + Vector3.up * 0.8f * curScale;
-            from.z = 0f;
-            Vector3 dir = target.transform.position - from;
-            dir.z = 0f;
-            judgmentOrb = BossProjectile.SpawnJudgment(from, dir, 6f, judgmentDamage * Dmg, judgmentReflectDamage, judgmentRallies, this, rageColor);
-            Shake(0.5f, 0.2f);
-            punch = 1f;
-            handRaiseTarget = 0f;
+                Vector3 dir = target != null ? target.HitCenter - from : Vector3.right * facing;
+                dir.z = 0f;
+                judgmentOrb = BossProjectile.SpawnJudgment(from, dir, 6f, judgmentDamage * Dmg, judgmentReflectDamage, judgmentRallies, this, rageColor, look);
+                Shake(0.5f, 0.2f);
+            }, false);
 
             // Attend la fin de l'échange
-            t = 0f;
+            float t = 0f;
             while (judgmentOrb != null && t < 10f && !dead)
             {
                 t += Time.deltaTime;
                 yield return null;
             }
+            ArmRelease(ThrowArm);
             ResetPose();
         }
 
-        // L'orbe du Jugement revient sur lui : la renvoie au joueur tant qu'il reste des échanges
+        // Le projectile revient sur lui : il le rattrape d'une main et le relance, tant qu'il reste des échanges
         public bool ReturnOrb()
         {
             if (dead) return false;
-            weaponVel -= 1600f;  // revers de faux fouetté
-            weaponTarget = 25f;
-            sharpness = 8f;
             flash = 0.5f;
             Shake(0.2f, 0.15f);
+            if (Application.isPlaying && isActiveAndEnabled)
+            {
+                if (catchRoutine != null) StopCoroutine(catchRoutine);
+                catchRoutine = StartCoroutine(CatchGesture());
+            }
             return true;
+        }
+
+        private Coroutine catchRoutine;
+
+        // Rattrapage : la main claque devant le bol, recule sous le choc en armant, puis relance d'un coup de fouet
+        // et retombe au sol
+        private IEnumerator CatchGesture()
+        {
+            Vector3 start = HandPos(ThrowArm);
+            tiltVel -= 70f;
+            yield return ArmPath(ThrowArm, 0.3f, e => Curve(e, start, ShoulderRel(ThrowArm, 0.45f, 0.25f), ShoulderRel(ThrowArm, -0.15f, 0.5f)),
+                u => 1f - (1f - u) * (1f - u), 0f);
+            yield return Whip(ThrowArm, 1.3f, null, false);
+            ArmRelease(ThrowArm);
+            catchRoutine = null;
+        }
+
+        // ---------- Échanges (famille du Jugement) ----------
+
+        // Ramasse un rocher et le soulève au-dessus du bol en tremblant : signal commun aux échanges
+        private IEnumerator ChargeExchange(float duration, ProjectileLook look, float size)
+        {
+            yield return Scoop(ThrowArm, look, size, 1f);
+            // Soulève : la main remonte contre le bol puis au-dessus, le bol se penche en arrière sous le poids
+            Vector3 start = HandPos(ThrowArm);
+            tiltTarget = -12f;
+            yield return ArmPath(ThrowArm, 0.45f, e => Curve(e, start, ShoulderRel(ThrowArm, 0.2f, 0.25f), ShoulderRel(ThrowArm, -0.15f, 0.8f)), Smooth, 0f);
+            float t = 0f;
+            while (t < duration && !dead)
+            {
+                float u = t / duration;
+                // Le poids le fait plier peu à peu, et trembler de plus en plus
+                Vector3 up = ShoulderRel(ThrowArm, -0.15f - 0.1f * u, 0.8f - 0.08f * u);
+                ArmTo(ThrowArm, up + Random.insideUnitSphere * 0.04f * u * curScale, 0f);
+                if (Random.value < 0.12f) Shake(0.1f, 0.05f + u * 0.06f);
+                t += Time.deltaTime;
+                yield return null;
+            }
+            Shake(0.4f, 0.18f);
+        }
+
+        // Attend la fin de l'échange (plus aucun projectile d'échange en jeu)
+        private IEnumerator WaitExchangeEnd(float timeout)
+        {
+            float t = 0f;
+            while ((RallyBubble.ActiveCount > 0 || PushBubble.ActiveCount > 0) && t < timeout && !dead)
+            {
+                t += Time.deltaTime;
+                yield return null;
+            }
+            ArmRelease(ThrowArm);
+            ArmRelease(OtherArm);
+            ResetPose();
+        }
+
+        private RallyBubble.Settings ExchangeSettings(float speed, float size, float damage, float reflectDamage, Color color, ProjectileLook look)
+        {
+            return new RallyBubble.Settings
+            {
+                Speed = speed * Spd,
+                Size = size,
+                Damage = damage * Dmg,
+                ReflectDamage = reflectDamage,
+                SpeedUp = 1.05f,
+                Color = color,
+                Look = look,
+            };
+        }
+
+        // Lâche le projectile que tient la main : renvoie le point de départ (paume, plan de jeu)
+        private Vector3 ReleaseFrom(int arm)
+        {
+            Vector3 from = PalmPos(arm);
+            from.z = 0f;
+            if (jar != null) jar.ReleaseHeld(arm);
+            return from;
+        }
+
+        // Caillou qui se divise (phase III+) : chaque parade le casse en 2 au retour → 1, 2 puis 4 parades en rythme
+        private IEnumerator SplitBubble()
+        {
+            if (target == null) yield break;
+            ProjectileLook look = Look(ThrowArm);
+            yield return ChargeExchange(1.1f, look, 1.1f);
+            RallyBubble.Settings s = ExchangeSettings(6.5f, 1.1f, splitDamage, splitReflectDamage, PhaseColor(), look);
+            s.Splits = splitCount;
+            s.SplitStagger = splitStagger;
+            yield return Whip(ThrowArm, 1f, from => RallyBubble.Spawn(from, s, this), false);
+            yield return WaitExchangeEnd(20f);
+        }
+
+        // Double Jugement (phase IV+) : un caillou dans chaque main, lancés l'un après l'autre à des hauteurs
+        // différentes ; il les renvoie en alternance
+        private IEnumerator DoubleJudgment()
+        {
+            if (target == null) yield break;
+            ProjectileLook look2 = Look(OtherArm);
+            yield return Scoop(OtherArm, look2, 1f, 1f);
+            // La main arrière garde son caillou levé derrière le bol
+            Vector3 os = HandPos(OtherArm);
+            yield return ArmPath(OtherArm, 0.35f, e => Curve(e, os, ShoulderRel(OtherArm, -0.1f, 0.3f), ShoulderRel(OtherArm, -0.05f, 0.65f)), Smooth, 0f);
+            ProjectileLook look1 = Look(ThrowArm);
+            yield return ChargeExchange(1.3f, look1, 1f);
+            RallyBubble.Settings s1 = ExchangeSettings(6f, 1f, doubleDamage, doubleReflectDamage, rageColor, look1);
+            s1.Rallies = 2;
+            yield return Whip(ThrowArm, 1f, from => RallyBubble.Spawn(from, s1, this, 0f, Vector3.up * 1.2f * curScale), false);
+            yield return new WaitForSeconds(Mathf.Max(0f, doubleOffset / Spd - 0.25f));
+            RallyBubble.Settings s2 = ExchangeSettings(6f, 1f, doubleDamage, doubleReflectDamage, rageColor, look2);
+            s2.Rallies = 2;
+            yield return Whip(OtherArm, 1f, from => RallyBubble.Spawn(from, s2, this, 0f, Vector3.down * 0.5f * curScale), true);
+            yield return WaitExchangeEnd(25f);
+        }
+
+        // Échange truqué (phase V) : plus de renvois, de plus en plus rapides, avec des feintes en l'air
+        private IEnumerator RiggedRally()
+        {
+            if (target == null) yield break;
+            ProjectileLook look = Look(ThrowArm);
+            yield return ChargeExchange(1.2f, look, 1.2f);
+            RallyBubble.Settings s = ExchangeSettings(6.5f, 1.2f, riggedDamage, riggedReflectDamage, rageColor, look);
+            s.Rallies = riggedRallies;
+            s.SpeedUp = riggedSpeedUp;
+            s.FeintChance = riggedFeintChance;
+            yield return Whip(ThrowArm, 1f, from => RallyBubble.Spawn(from, s, this), false);
+            yield return WaitExchangeEnd(30f);
+        }
+
+        // Bras de fer (phase V) : il pousse un gros rocher vers le joueur ; chaque parade le renvoie plus près du boss
+        private IEnumerator TugOfWar()
+        {
+            if (target == null) yield break;
+            ProjectileLook look = Look(ThrowArm);
+            yield return ChargeExchange(1.4f, look, 1.6f);
+            if (jar != null) jar.ReleaseHeld(ThrowArm);
+            PushBubble.Spawn(this, tugDamage * Dmg, tugReflectDamage, 1.6f, tugSpeed * Spd, tugSpeedUp, 18f, tugParries, rageColor, look);
+            // Les deux mains en avant, comme s'il poussait (le bol se jette en avant)
+            tiltTarget = 16f;
+            tiltVel += 50f;
+            Vector3 c = CorePosition;
+            StartCoroutine(ArmArc(OtherArm, ArmPoint(OtherArm, c.x + facing * 0.6f * Reach(OtherArm), c.y + 0.3f * Reach(OtherArm)), 0.25f, 0.1f * Reach(OtherArm), 0f));
+            yield return ArmArc(ThrowArm, ArmPoint(ThrowArm, c.x + facing * 0.7f * Reach(ThrowArm), c.y + 0.1f * Reach(ThrowArm)), 0.2f, 0f, 0f);
+            yield return WaitExchangeEnd(35f);
+        }
+
+        // ---------- Bras : petits outils ----------
+
+        private const int FrontArm = JarVisual.Front;
+        private const int BackArm = JarVisual.Back;
+
+        // Point de la main dans le plan du bras (x, y du monde ; profondeur du bras au repos)
+        private Vector3 ArmPoint(int arm, float x, float y)
+        {
+            float z = jar != null ? jar.RestPlant(arm, groundY).z : 0f;
+            return new Vector3(x, y, z);
+        }
+
+        private Vector3 RestPlant(int arm) => jar != null ? jar.RestPlant(arm, groundY) : new Vector3(transform.position.x, groundY, 0f);
+        private Vector3 HandPos(int arm) => jar != null ? jar.HandPosition(arm) : CorePosition;
+        private Vector3 PalmPos(int arm) => jar != null ? jar.PalmPosition(arm) : CorePosition;
+        private Vector3 ShoulderPos(int arm) => jar != null ? jar.ShoulderPosition(arm) : CorePosition;
+        private float Reach(int arm) => jar != null ? jar.Reach(arm) : 3f * curScale;
+
+        private void ArmTo(int arm, Vector3 world, float flatHand)
+        {
+            if (jar != null) jar.ArmTo(arm, world, flatHand);
+        }
+
+        private void ArmRelease(int arm)
+        {
+            if (jar != null) jar.ArmRelease(arm);
+        }
+
+        private void ReleaseArms()
+        {
+            ArmRelease(FrontArm);
+            ArmRelease(BackArm);
+            if (jar != null)
+            {
+                jar.ReleaseHeld(FrontArm);
+                jar.ReleaseHeld(BackArm);
+            }
+        }
+
+        // Les deux mains en même temps ; strike : accélère jusqu'au bout (frappe)
+        private IEnumerator ArmsMove(Vector3 front, Vector3 back, float dur, bool strike)
+        {
+            Vector3 f0 = HandPos(FrontArm), b0 = HandPos(BackArm);
+            float t = 0f;
+            while (t < dur)
+            {
+                float u = Mathf.Clamp01(t / dur);
+                float e = strike ? u * u : u * u * (3f - 2f * u);
+                ArmTo(FrontArm, Vector3.LerpUnclamped(f0, front, e), strike ? 1f : 0.4f);
+                ArmTo(BackArm, Vector3.LerpUnclamped(b0, back, e), strike ? 1f : 0.4f);
+                t += Time.deltaTime;
+                yield return null;
+            }
+            ArmTo(FrontArm, front, strike ? 1f : 0.4f);
+            ArmTo(BackArm, back, strike ? 1f : 0.4f);
+        }
+
+        // Main qui frappe le sol : secousse et gerbe de poussière
+        private void Impact(Vector3 at, float shake, int dust = 25)
+        {
+            if (shake > 0f) Shake(shake, shake * 0.8f);
+            ParticleBurst.Spawn("JarDust", new Vector3(at.x, groundY + 0.1f, 0f), new ParticleSystem.MinMaxGradient(new Color(0.5f, 0.47f, 0.42f), new Color(0.75f, 0.72f, 0.66f)), dust,
+                lifetime: new Vector2(0.4f, 0.9f),
+                speed: new Vector2(1f, 4f + shake * 6f),
+                size: new Vector2(0.08f, 0.3f),
+                gravity: 0.6f,
+                radius: 0.3f * curScale,
+                duration: 0.2f);
         }
 
         // ---------- Dégâts et mort ----------
@@ -971,7 +1351,6 @@ namespace ParryEverything.Boss
         {
             flash = 1f;
             tiltVel -= 90f;
-            headVel -= 120f;
             Shake(0.15f, 0.12f);
         }
 
@@ -983,8 +1362,6 @@ namespace ParryEverything.Boss
             TimeControl.SetEffectScale(0.25f);
             Shake(2f, 0.35f);
             tiltTarget = -30f;
-            weaponTarget = -60f;
-            glowTarget = 4f;
 
             // Tremble, flashe, puis éclate en braises
             float t = 0f;
@@ -1077,13 +1454,17 @@ namespace ParryEverything.Boss
         {
             switch (move)
             {
-                case LabMove.Swing: return Swing();
-                case LabMove.Orbs: return Orbs();
+                case LabMove.Swing: return Slap();
+                case LabMove.Orbs: return ThrowRocks();
                 case LabMove.Slam: return Slam();
-                case LabMove.MeteorRain: return MeteorRain();
-                case LabMove.Dash: return Dash();
+                case LabMove.MeteorRain: return RockRain();
+                case LabMove.Dash: return Leap();
                 case LabMove.Pillars: return Pillars();
                 case LabMove.Judgment: return Judgment();
+                case LabMove.SplitBubble: return SplitBubble();
+                case LabMove.DoubleJudgment: return DoubleJudgment();
+                case LabMove.RiggedRally: return RiggedRally();
+                case LabMove.TugOfWar: return TugOfWar();
                 case LabMove.Roar: return Roar(1f);
                 case LabMove.Stagger: return Stagger();
                 default: return PhaseTransition();
@@ -1145,18 +1526,6 @@ namespace ParryEverything.Boss
             }
         }
 
-        // Main de la faux, repère du modèle, selon l'angle de la faux et l'inclinaison du corps
-        private static Vector3 HandLocal(float angle, float tiltDeg)
-        {
-            Vector3 mid = new Vector3(0.6f, 0.05f, -0.8f);      // repos (faux à 25°)
-            Vector3 high = new Vector3(0.25f, 0.6f, -0.7f);     // faux levée
-            Vector3 low = new Vector3(0.95f, -0.35f, -0.65f);   // fin de frappe
-            Vector3 p = angle >= 25f
-                ? Vector3.LerpUnclamped(mid, high, Mathf.Min((angle - 25f) / 70f, 1.3f))
-                : Vector3.LerpUnclamped(mid, low, Mathf.Min((25f - angle) / 135f, 1.3f));
-            return Quaternion.Euler(0f, 0f, -tiltDeg) * p;
-        }
-
         private float PhaseScale() { return scale * (1f + growthPerPhase * phase); }
 
         private float HoverY() { return groundY + hoverHeight * curScale; }
@@ -1166,11 +1535,24 @@ namespace ParryEverything.Boss
             return target != null ? Mathf.Abs(target.transform.position.x - transform.position.x) : Mathf.Infinity;
         }
 
-        // Déplacement lourd et fluide (accélère et freine)
+        // Déplacement pénible : il se traîne par tractions (JarVisual.Crawl, appliqué dans ApplyPose).
+        // À appeler à chaque image tant qu'il doit avancer ; la hauteur suit en douceur.
         private void MoveToward(float x, float y, float speedMul = 1f)
         {
-            Vector3 goal = new Vector3(x, y, 0f);
-            transform.position = Vector3.SmoothDamp(transform.position, goal, ref moveVel, 0.35f / speedMul, moveSpeed * speedMul);
+            if (jar == null)
+            {
+                Vector3 goal = new Vector3(x, y, 0f);
+                float pulse = 0.55f + 0.45f * Mathf.Sin(Time.time * 7f);
+                transform.position = Vector3.SmoothDamp(transform.position, goal, ref moveVel, 0.35f / speedMul, moveSpeed * speedMul * pulse);
+                return;
+            }
+            crawlWant = x - transform.position.x;
+            // Même vitesse moyenne que l'ancien glissement
+            crawlSpeed = moveSpeed * speedMul * 0.55f;
+            crawlWanted = true;
+            Vector3 p = transform.position;
+            p.y = Mathf.SmoothDamp(p.y, y, ref moveVel.y, 0.35f / speedMul);
+            transform.position = p;
         }
 
         private void Shake(float duration, float magnitude)
@@ -1196,7 +1578,7 @@ namespace ParryEverything.Boss
         // =====================================================================
         //  Visuel
         // =====================================================================
-        // Repère du modèle : avant = +X, haut = +Y, côté caméra = -Z. Unité = scale.
+        // Repère du visuel : avant = +X, haut = +Y, côté caméra = -Z. Unité = scale. Origine = centre du bol.
 
         private void BuildVisual()
         {
@@ -1205,248 +1587,33 @@ namespace ParryEverything.Boss
             visual = new GameObject("GuardianVisual");
             Track(visual);
             visual.transform.SetParent(transform, false);
-
-            armorMat = MakeMat(armorColor, 0.6f, false);
-            trimMat = MakeMat(trimColor, 0.4f, false);
-            bladeMat = MakeMat(bladeColor, 0.8f, false);
-            glowMat = MakeMat(glowColor, 0f, true);
-
             bodyT = Empty("Body", visual.transform);
-
-            // Torse : plus large aux épaules
-            Part("Torso", bodyT, LowPoly.Prism(6, 0.38f, 0.62f, 1.0f, 0.2f), armorMat, new Vector3(0f, -0.45f, 0f), Vector3.zero, Vector3.one);
-            Part("Collar", bodyT, LowPoly.Prism(6, 0.64f, 0.5f, 0.14f, 0.2f), trimMat, new Vector3(0f, 0.52f, 0f), Vector3.zero, Vector3.one);
-            Part("Belt", bodyT, LowPoly.Prism(6, 0.42f, 0.42f, 0.12f, 0.2f), trimMat, new Vector3(0f, -0.42f, 0f), Vector3.zero, Vector3.one);
-
-            // Cœur de braise sur la poitrine
-            core = Part("Core", bodyT, LowPoly.Icosahedron(0.1f, 3), glowMat, new Vector3(0.5f, 0.15f, 0f), Vector3.zero, Vector3.one * 0.3f);
-
-            // Queue de flammes (spectre : pas de jambes)
-            tailPivot = Empty("TailPivot", bodyT);
-            tailPivot.localPosition = new Vector3(0f, -0.45f, 0f);
-            tail = Part("Tail", tailPivot, LowPoly.Prism(6, 0.38f, 0f, 1.5f, 0.3f), glowMat, Vector3.zero, new Vector3(180f, 0f, 0f), Vector3.one);
-
-            // Casque : boîte effilée, fente lumineuse, cornes
-            head = Empty("Head", bodyT);
-            head.localPosition = new Vector3(0.05f, 0.85f, 0f);
-            Part("Helmet", head, LowPoly.Box(0.75f), armorMat, Vector3.zero, Vector3.zero, new Vector3(0.45f, 0.5f, 0.42f));
-            Part("Visor", head, LowPoly.Box(1f), trimMat, new Vector3(0.2f, -0.02f, 0f), Vector3.zero, new Vector3(0.1f, 0.22f, 0.38f));
-            Part("Eyes", head, LowPoly.Box(1f), glowMat, new Vector3(0.255f, 0.02f, 0f), Vector3.zero, new Vector3(0.03f, 0.05f, 0.3f));
-            for (int i = 0; i < 2; i++)
+            if (jarModel != null)
             {
-                float side = i == 0 ? 1f : -1f;
-                // Corne en deux parties : vers l'extérieur, puis vers le haut et l'arrière
-                Transform horn = Part("Horn", head, LowPoly.Prism(5, 0.09f, 0.06f, 0.35f), trimMat, new Vector3(-0.05f, 0.15f, side * 0.18f), new Vector3(side * 70f, 0f, 10f), Vector3.one);
-                horns.Add(horn);
-                Part("HornTip", horn, LowPoly.Prism(5, 0.06f, 0f, 0.5f), armorMat, new Vector3(0f, 0.33f, 0f), new Vector3(-side * 60f, 0f, 20f), Vector3.one);
+                jar = new JarVisual(jarModel, bodyT, generated);
+                core = jar.Core;
+                // Main qui agrippe, bol qui racle, morceau qui tombe : poussière (et petite secousse au raclement)
+                jar.OnDust = (at, strength) => Impact(at, strength >= 1f ? 0.04f : 0f, Mathf.RoundToInt(4 + 10 * strength));
+            }
+            else
+            {
+                core = Empty("Core", bodyT);
             }
 
-            // Couronne infernale : anneau de pointes lumineuses derrière la tête (une de plus par phase)
-            crown = Empty("Crown", head);
-            crown.localPosition = new Vector3(-0.1f, 0.1f, 0.25f);
-            Mesh crownSpike = LowPoly.Prism(4, 0.06f, 0f, 0.38f);
-            for (int i = 0; i < 9; i++)
-            {
-                Transform pivot = Empty("CrownPivot", crown);
-                pivot.localRotation = Quaternion.Euler(0f, 0f, i * 40f);
-                Part("CrownSpike", pivot, crownSpike, glowMat, new Vector3(0f, 0.55f, 0f), Vector3.zero, Vector3.one, i == 0);
-                crownSpikes.Add(pivot);
-            }
-
-            // Épaulières à pointes
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? 1f : -1f;
-                Part("Pauldron", bodyT, LowPoly.Icosahedron(0.08f, 10 + i), trimMat, new Vector3(0f, 0.55f, side * 0.62f), Vector3.zero, new Vector3(0.5f, 0.32f, 0.45f));
-                Part("PauldronSpike", bodyT, LowPoly.Prism(4, 0.08f, 0f, 0.4f), armorMat, new Vector3(-0.05f, 0.65f, side * 0.68f), new Vector3(side * 35f, 0f, 15f), Vector3.one);
-                Part("PauldronSpike", bodyT, LowPoly.Prism(4, 0.06f, 0f, 0.28f), armorMat, new Vector3(0.12f, 0.62f, side * 0.62f), new Vector3(side * 20f, 0f, -10f), Vector3.one);
-            }
-
-            // Mains flottantes : la main avant (côté caméra) tient la faux, l'autre lance les orbes
-            frontHand = Part("HandFront", visual.transform, LowPoly.Icosahedron(0.1f, 20), armorMat, Vector3.zero, Vector3.zero, Vector3.one * 0.3f);
-            backHand = Part("HandBack", visual.transform, LowPoly.Icosahedron(0.1f, 21), armorMat, Vector3.zero, Vector3.zero, Vector3.one * 0.3f);
-
-            // Faux : pivot dans la main avant
-            weaponPivot = Empty("ScythePivot", visual.transform);
-            BuildScythe(weaponPivot);
-
-            BuildPhaseParts();
-            BuildEmbers();
             ApplyPose(0f, 0f);
         }
-
-        private void AddPhasePart(Transform t, int minPhase)
-        {
-            phaseParts.Add(t);
-            phasePartBase.Add(t.localScale);
-            phasePartMin.Add(minPhase);
-            phasePartGrow.Add(0f);
-            phasePartVel.Add(0f);
-            t.localScale = Vector3.zero;
-        }
-
-        private void BuildPhaseParts()
-        {
-            System.Random r = new System.Random(5);
-            float R(float a, float b) { return a + (float)r.NextDouble() * (b - a); }
-
-            // Phase II : fissures de lave sur le torse et le casque
-            Mesh crack = LowPoly.Box(1f);
-            for (int i = 0; i < 12; i++)
-            {
-                float y = R(-0.35f, 0.45f);
-                float a = R(-75f, 75f);
-                float rad = (0.38f + 0.24f * (y + 0.45f)) * 0.88f;
-                Vector3 pos = new Vector3(Mathf.Cos(a * Mathf.Deg2Rad) * rad, y, Mathf.Sin(a * Mathf.Deg2Rad) * rad);
-                Transform t = Part("Crack", bodyT, crack, glowMat, pos, new Vector3(0f, -a, R(-55f, 55f)), new Vector3(0.05f, R(0.15f, 0.38f), 0.035f), i == 0);
-                AddPhasePart(t, 1);
-            }
-
-            // Phase III : ailes spectrales (éclats lumineux en éventail dans le dos)
-            float[] len = { 1.5f, 1.85f, 1.65f, 1.3f, 0.95f };
-            for (int w = 0; w < 2; w++)
-            {
-                float side = w == 0 ? 1f : -1f;
-                Transform wing = Empty("Wing", bodyT);
-                wing.localPosition = new Vector3(-0.3f, 0.45f, side * 0.3f);
-                wings.Add(wing);
-                for (int i = 0; i < len.Length; i++)
-                {
-                    Transform shard = Part("WingShard", wing, LowPoly.Prism(3, 0.13f, 0f, len[i]), glowMat, Vector3.zero, new Vector3(side * 28f, 0f, 22f + i * 24f), new Vector3(1f, 1f, 0.4f));
-                    AddPhasePart(shard, 2);
-                }
-            }
-
-            // Phase IV : la faux s'enflamme (les cornes grandissent dans ApplyPose)
-            GameObject fire = new GameObject("BladeFire");
-            Track(fire);
-            fire.transform.SetParent(weaponPivot, false);
-            fire.transform.localPosition = new Vector3(0.95f, 1.5f, 0f);
-            bladeFire = fire.AddComponent<ParticleSystem>();
-            bladeFire.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            var main = bladeFire.main;
-            main.loop = true;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.6f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.2f, 0.8f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.22f);
-            main.gravityModifier = -0.4f;
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-            var em = bladeFire.emission;
-            em.rateOverTime = 0f;
-            var shape = bladeFire.shape;
-            shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(1.8f, 0.8f, 0.1f);
-            var sol = bladeFire.sizeOverLifetime;
-            sol.enabled = true;
-            sol.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0f));
-            Material fm = MaterialFactory.Unlit(Color.white);
-            Track(fm);
-            bladeFire.GetComponent<ParticleSystemRenderer>().material = fm;
-            bladeFire.Play();
-
-            // Phase V : éclats d'armure arrachés qui tournent autour de lui
-            orbit = Empty("Orbit", visual.transform);
-            orbit.localPosition = new Vector3(0f, 0.15f, 0f);
-            for (int i = 0; i < 8; i++)
-            {
-                float a = i * Mathf.PI * 2f / 8f;
-                Vector3 pos = new Vector3(Mathf.Cos(a) * 1.45f, Mathf.Sin(a * 3f) * 0.25f, Mathf.Sin(a) * 1.45f);
-                Transform shard = Part("OrbitShard", orbit, LowPoly.Prism(4, 0.16f, 0f, R(0.4f, 0.65f), 0.5f), i % 2 == 0 ? trimMat : armorMat, pos, new Vector3(R(0f, 360f), R(0f, 360f), R(0f, 360f)), Vector3.one);
-                AddPhasePart(shard, 4);
-            }
-        }
-
-        // Braises qui s'échappent du corps et montent
-        private void BuildEmbers()
-        {
-            GameObject go = new GameObject("Embers");
-            Track(go);
-            go.transform.SetParent(bodyT, false);
-            go.transform.localPosition = new Vector3(0f, -0.8f, 0f);
-            embers = go.AddComponent<ParticleSystem>();
-            embers.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-
-            var main = embers.main;
-            main.loop = true;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.4f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 1f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.12f);
-            main.startColor = glowColor;
-            main.gravityModifier = -0.15f; // montent
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-            var emission = embers.emission;
-            emission.rateOverTime = 12f;
-
-            var shape = embers.shape;
-            shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = 0.6f;
-
-            var size = embers.sizeOverLifetime;
-            size.enabled = true;
-            size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0f));
-
-            Material m = MaterialFactory.Unlit(Color.white);
-            Track(m);
-            embers.GetComponent<ParticleSystemRenderer>().material = m;
-            embers.Play();
-        }
-
-        private void BuildScythe(Transform pivot)
-        {
-            // Manche
-            Part("Shaft", pivot, LowPoly.Prism(5, 0.05f, 0.045f, 3.1f), armorMat, new Vector3(0f, -1.2f, 0f), Vector3.zero, Vector3.one);
-            Part("Pommel", pivot, LowPoly.Icosahedron(0f, 0), trimMat, new Vector3(0f, -1.25f, 0f), Vector3.zero, Vector3.one * 0.14f);
-            Part("Collar", pivot, LowPoly.Prism(6, 0.09f, 0.09f, 0.18f), trimMat, new Vector3(0f, 1.62f, 0f), Vector3.zero, Vector3.one);
-
-            // Lame courbe : tranchant (extérieur) et dos (intérieur), vers l'avant puis vers le bas
-            Vector3[] edge =
-            {
-                new Vector3(0f, 1.8f, 0f), new Vector3(0.45f, 1.95f, 0f), new Vector3(0.95f, 1.92f, 0f),
-                new Vector3(1.4f, 1.72f, 0f), new Vector3(1.72f, 1.38f, 0f), new Vector3(1.85f, 1.02f, 0f),
-            };
-            float[] width = { 0.32f, 0.34f, 0.3f, 0.22f, 0.12f, 0.0f };
-            List<Vector3> v = new List<Vector3>();
-            List<Vector3> glowV = new List<Vector3>();
-            float th = 0.035f;
-            Vector3 inner(int k)
-            {
-                Vector3 tan = (edge[Mathf.Min(k + 1, edge.Length - 1)] - edge[Mathf.Max(k - 1, 0)]).normalized;
-                Vector3 n = new Vector3(tan.y, -tan.x, 0f); // vers l'intérieur de la courbe (en bas)
-                return edge[k] + n * width[k];
-            }
-            for (int k = 0; k < edge.Length - 1; k++)
-            {
-                Vector3 o0 = edge[k], o1 = edge[k + 1], i0 = inner(k), i1 = inner(k + 1);
-                Vector3 f = Vector3.back * th, b = Vector3.forward * th;
-                // Faces avant et arrière (légèrement bombées au milieu)
-                Vector3 m0 = (o0 + i0) / 2f, m1 = (o1 + i1) / 2f;
-                LowPoly.Quad(v, o0, o1, m1 + f, m0 + f, Vector3.back);
-                LowPoly.Quad(v, m0 + f, m1 + f, i1, i0, Vector3.back);
-                LowPoly.Quad(v, o0, o1, m1 + b, m0 + b, Vector3.forward);
-                LowPoly.Quad(v, m0 + b, m1 + b, i1, i0, Vector3.forward);
-                // Liseré lumineux le long du tranchant
-                Vector3 outN = (o0 - i0).normalized * 0.05f, outN1 = (o1 - i1).normalized * 0.05f;
-                LowPoly.Quad(glowV, o0, o1, o1 + outN1, o0 + outN, Vector3.back);
-                LowPoly.Quad(glowV, o0, o1, o1 + outN1, o0 + outN, Vector3.forward);
-            }
-            Mesh blade = LowPoly.Build("Blade", v);
-            Track(blade);
-            Mesh edgeMesh = LowPoly.Build("BladeEdge", glowV);
-            Track(edgeMesh);
-            Part("Blade", pivot, blade, bladeMat, Vector3.zero, Vector3.zero, Vector3.one, false);
-            Part("BladeEdge", pivot, edgeMesh, glowMat, Vector3.zero, Vector3.zero, Vector3.one, false);
-
-            bladePoints.Clear();
-            bladePoints.AddRange(edge);
-            bladePoints.Add(new Vector3(0f, 1.6f, 0f));
-        }
-
 
         // Place les pièces selon la pose courante
         private void ApplyPose(float dt, float time)
         {
             float fwdVel = 0f;
+            // Reptation : la traction fait avancer le corps (avant le calcul de la vitesse et des bras)
+            if (jar != null && dt > 0f && Application.isPlaying)
+            {
+                float dx = jar.Crawl(dt, crawlWanted && !dead ? crawlWant : 0f, crawlSpeed, groundY);
+                transform.position += new Vector3(dx, 0f, 0f);
+                crawlWanted = false;
+            }
             if (dt > 0f)
             {
                 // Vitesse réelle du corps (sert à l'inclinaison, à la queue, à l'étirement)
@@ -1455,89 +1622,32 @@ namespace ParryEverything.Boss
                 bodyVel = Vector3.Lerp(bodyVel, raw, 1f - Mathf.Exp(-12f * dt));
                 fwdVel = bodyVel.x * facing;
 
-                // Faux : ressort. Coup rapide = peu amorti -> elle dépasse puis revient (accompagnement du geste)
-                float wDamp = sharpness >= 20f ? 0.42f : 0.8f;
-                Spring(ref weaponAngle, ref weaponVel, weaponTarget, sharpness * 0.33f, wDamp, dt);
-                // Corps lourd : se penche dans le sens du mouvement, respire légèrement
+                // Bol lourd : penche dans le sens où il est tiré, tangue légèrement
                 float lean = Mathf.Clamp(fwdVel * 1.2f, -18f, 25f) + Mathf.Sin(time * 0.9f) * 2f;
+                if (jar != null) lean += jar.CrawlLean * facing * 10f;
                 Spring(ref tilt, ref tiltVel, tiltTarget + lean, 2.4f, 0.6f, dt);
-                Spring(ref handRaise, ref handVel, handRaiseTarget, 2.8f, 0.7f, dt);
-                punch = Mathf.Max(0f, punch - dt * 8f);
-                Spring(ref punchPos, ref punchVel, punch, 5f, 0.35f, dt);
-                glow = Mathf.Lerp(glow, glowTarget, 1f - Mathf.Exp(-10f * dt));
                 flash = Mathf.Max(0f, flash - dt * 4f);
 
-                // Tête : regarde le joueur et compense en partie l'inclinaison du corps (en retard sur le corps)
-                float look = 0f;
-                if (target != null && head != null)
-                {
-                    Vector3 d = target.transform.position - head.position;
-                    look = Mathf.Clamp(Mathf.Atan2(d.y, Mathf.Abs(d.x) + 0.01f) * Mathf.Rad2Deg * 0.5f, -18f, 14f);
-                }
-                Spring(ref headAngle, ref headVel, look + tilt * 0.45f, 3f, 0.55f, dt);
-                // Queue : traîne derrière le mouvement, pend vers le bas, ondule
-                float sway = -Mathf.Clamp(fwdVel * 3f, -40f, 40f) + tilt * 0.6f + Mathf.Sin(time * 1.7f) * 6f;
-                Spring(ref tailSway, ref tailVel, sway, 1.8f, 0.35f, dt);
                 // Étiré quand il file à la verticale ; s'écrase tout seul à l'arrêt (le ressort dépasse)
                 float stretch = -Mathf.Clamp(Mathf.Abs(bodyVel.y) * 0.006f, 0f, 0.14f);
                 Spring(ref squash, ref squashVel, stretch, 3f, 0.3f, dt);
 
                 // Demi-tour : il pivote face caméra puis de l'autre côté
                 flip = Mathf.MoveTowards(flip, facing, dt * 4.5f);
-                crownSpin += dt * (20f + phase * 15f);
                 // Métamorphose : grandit lentement vers la taille de la phase
                 curScale = Mathf.Lerp(curScale, PhaseScale(), 1f - Mathf.Exp(-1.5f * dt));
-                hornGrow = Mathf.Lerp(hornGrow, phase >= 3 ? 1f : 0f, 1f - Mathf.Exp(-3f * dt));
             }
             else
             {
-                weaponAngle = weaponTarget;
                 tilt = tiltTarget;
-                handRaise = handRaiseTarget;
-                weaponVel = tiltVel = handVel = headVel = tailVel = squashVel = 0f;
-                headAngle = tailSway = squash = punchPos = 0f;
+                tiltVel = squashVel = 0f;
+                squash = 0f;
                 lastPos = transform.position;
                 flip = facing;
                 curScale = PhaseScale();
-                hornGrow = phase >= 3 ? 1f : 0f;
             }
 
-            // Pièces de phase : apparaissent avec un rebond
-            for (int i = 0; i < phaseParts.Count; i++)
-            {
-                float goal = phase >= phasePartMin[i] ? 1f : 0f;
-                float g = phasePartGrow[i];
-                if (dt > 0f)
-                {
-                    float v = phasePartVel[i];
-                    v += (90f * (goal - g) - 10f * v) * dt;
-                    g += v * dt;
-                    phasePartVel[i] = v;
-                }
-                else g = goal;
-                phasePartGrow[i] = g;
-                bool show = g > 0.01f;
-                if (phaseParts[i].gameObject.activeSelf != show) phaseParts[i].gameObject.SetActive(show);
-                phaseParts[i].localScale = phasePartBase[i] * Mathf.Max(g, 0f);
-            }
-            foreach (Transform h in horns) h.localScale = Vector3.one * (1f + hornGrow * 0.7f);
-            for (int w = 0; w < wings.Count; w++)
-            {
-                // Battement lent des ailes
-                float side = w == 0 ? 1f : -1f;
-                float flap = Mathf.Sin(time * (1.6f + Mathf.Abs(fwdVel) * 0.15f));
-                wings[w].localRotation = Quaternion.Euler(side * flap * 8f, 0f, flap * 10f - Mathf.Clamp(fwdVel * 2f, -25f, 25f) + squash * 40f);
-            }
-            if (orbit != null) orbit.localRotation = Quaternion.Euler(18f, time * 70f, 0f);
-            if (bladeFire != null)
-            {
-                var fm = bladeFire.main;
-                fm.startColor = new ParticleSystem.MinMaxGradient(PhaseColor(), Color.Lerp(PhaseColor(), Color.white, 0.5f));
-                var fe = bladeFire.emission;
-                fe.rateOverTime = phase >= 3 ? 70f : 0f;
-            }
-
-            // Miroir selon le côté du joueur (la faux reste côté caméra), et un peu tourné vers la caméra
+            // Miroir selon le côté du joueur (le bras avant reste côté joueur), et un peu tourné vers la caméra
             // Demi-tour : vraie rotation. À mi-chemin il fait face à la caméra (yaw 90) ; là, le miroir
             // ne change que la profondeur, pas la silhouette : le passage de l'autre côté est invisible.
             float sgn = Mathf.Abs(flip) < 1e-4f ? Mathf.Sign(facing) : Mathf.Sign(flip);
@@ -1546,63 +1656,19 @@ namespace ParryEverything.Boss
             visual.transform.localScale = new Vector3(sgn * (1f + squash * 0.5f), 1f - squash, 1f + squash * 0.5f) * curScale * deathFade;
             visual.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
 
-            // Lévitation lente et lourde (deux ondes : moins mécanique)
-            float bob = Mathf.Sin(time * 1.3f) * 0.08f + Mathf.Sin(time * 0.71f + 1.3f) * 0.04f;
-            visual.transform.localPosition = new Vector3(0f, bob * curScale, 0f);
-            bodyT.localRotation = Quaternion.Euler(0f, 0f, -tilt);
-            bodyT.localScale = new Vector3(1f, 1f + Mathf.Sin(time * 1.3f + 0.6f) * 0.015f, 1f); // respiration
-            head.localRotation = Quaternion.Euler(0f, 0f, headAngle);
-            tailPivot.localRotation = Quaternion.Euler(0f, 0f, tailSway);
+            // Posé au sol : le bol tangue autour de son pied (pas d'inclinaison franche).
+            // Pendant l'effort d'une traction, il tremble.
+            float strain = jar != null && dt > 0f ? jar.CrawlStrain : 0f;
+            visual.transform.localPosition = strain > 0f
+                ? new Vector3(Random.Range(-1f, 1f), Random.Range(-0.4f, 0.4f), 0f) * 0.025f * strain * curScale
+                : Vector3.zero;
+            bodyT.localRotation = Quaternion.Euler(0f, 0f, -tilt * 0.35f);
 
-            // Flammes de la queue
-            tail.localScale = new Vector3(1f + Mathf.Sin(time * 13f) * 0.06f, 1f + Mathf.Sin(time * 9f) * 0.12f + phase * 0.05f, 1f + Mathf.Cos(time * 11f) * 0.06f);
-            core.localScale = Vector3.one * (0.3f + Mathf.Sin(time * (4f + phase)) * 0.03f + glow * 0.05f);
-
-            // Couronne : 5 pointes en phase I, 9 en phase V, tourne de plus en plus vite
-            crown.localRotation = Quaternion.Euler(0f, 0f, crownSpin);
-            int shown = 5 + phase;
-            for (int i = 0; i < crownSpikes.Count; i++)
+            // Bol : morceaux selon la phase, chair qui respire, flash quand il est touché
+            if (jar != null)
             {
-                bool on = i < shown;
-                if (crownSpikes[i].gameObject.activeSelf != on) crownSpikes[i].gameObject.SetActive(on);
-                crownSpikes[i].localRotation = Quaternion.Euler(0f, 0f, i * 360f / shown);
-                crownSpikes[i].localScale = Vector3.one * (1f + glow * 0.08f);
-            }
-
-            // Mains
-            // La main suit la faux (levée = main haute en arrière, frappe = main basse en avant) et le corps
-            Vector3 frontPos = HandLocal(weaponAngle, tilt) + new Vector3(0f, Mathf.Sin(time * 2.3f) * 0.03f, 0f);
-            frontHand.localPosition = frontPos;
-            Vector3 backRest = new Vector3(0.35f, -0.05f + Mathf.Sin(time * 2.1f + 1f) * 0.05f, 0.75f);
-            Vector3 backCast = new Vector3(0.7f, 1.2f, 0.6f);
-            Vector3 back = Vector3.LerpUnclamped(backRest, backCast, handRaise) + Vector3.right * punchPos * 0.35f;
-            backHand.localPosition = Quaternion.Euler(0f, 0f, -tilt) * back;
-
-            weaponPivot.localPosition = frontPos;
-            weaponPivot.localScale = Vector3.one * bladeScale;
-            weaponPivot.localRotation = Quaternion.Euler(0f, 0f, weaponAngle);
-
-            // Couleurs : lueur selon la phase, flash blanc quand il est touché
-            Color gc = PhaseColor();
-            float pulse = 1.6f + Mathf.Sin(time * 4f) * 0.3f + glow * 1.5f;
-            for (int i = 0; i < mats.Count; i++)
-            {
-                Material m = mats[i];
-                Color baseC = m == glowMat ? gc : baseColors[i];
-                // L'armure noircit et rougeoie au fil des phases
-                if (m == armorMat) baseC = Color.Lerp(armorColor, new Color(0.05f, 0.01f, 0.02f), phase / 4f);
-                if (m == trimMat) baseC = Color.Lerp(trimColor, rageColor * 0.55f, phase / 4f);
-                m.color = Color.Lerp(baseC, Color.white, flash);
-                if (m == glowMat) m.SetColor("_EmissionColor", Color.Lerp(gc * pulse, Color.white * 3f, flash));
-                else m.SetColor("_EmissionColor", Color.white * flash * 1.5f);
-            }
-
-            if (embers != null)
-            {
-                var main = embers.main;
-                main.startColor = gc;
-                var emission = embers.emission;
-                emission.rateOverTime = 12f + phase * 10f + glow * 15f;
+                jar.SetPhase(phase, dt <= 0f);
+                jar.Tick(dt, time, flash, groundY, bodyVel);
             }
         }
 
@@ -1616,35 +1682,9 @@ namespace ParryEverything.Boss
             return go.transform;
         }
 
-        private Transform Part(string name, Transform parent, Mesh mesh, Material mat, Vector3 pos, Vector3 euler, Vector3 size, bool trackMesh = true)
+        private T Track<T>(T o) where T : Object
         {
-            if (trackMesh) Track(mesh);
-            GameObject go = new GameObject(name);
-            Track(go);
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = pos;
-            go.transform.localRotation = Quaternion.Euler(euler);
-            go.transform.localScale = size;
-            go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
-            return go.transform;
-        }
-
-        private Material MakeMat(Color c, float gloss, bool glowing)
-        {
-            Material m = MaterialFactory.Lit(c);
-            m.SetFloat("_Glossiness", gloss);
-            m.EnableKeyword("_EMISSION"); // aussi pour le flash blanc
-            m.SetColor("_EmissionColor", glowing ? c * 2f : Color.black);
-            Track(m);
-            mats.Add(m);
-            baseColors.Add(c);
-            return m;
-        }
-
-        private void Track(Object o)
-        {
-            generated.Track(o);
+            return generated.Track(o);
         }
 
         // =====================================================================
@@ -1673,7 +1713,7 @@ namespace ParryEverything.Boss
             Color old = GUI.color;
             // Cadre
             GuiDraw.FilledRect(new Rect(x - 4f, y - 4f, w + 8f, h + 8f), new Color(0f, 0f, 0f, 0.85f));
-            GuiDraw.FilledRect(new Rect(x - 2f, y - 2f, w + 4f, h + 4f), Color.Lerp(trimColor, pc, 0.4f));
+            GuiDraw.FilledRect(new Rect(x - 2f, y - 2f, w + 4f, h + 4f), Color.Lerp(new Color(0.42f, 0.1f, 0.07f), pc, 0.4f));
             GuiDraw.FilledRect(new Rect(x, y, w, h), new Color(0.12f, 0.02f, 0.03f));
             // Dégâts récents (traînée claire), puis vie
             GuiDraw.FilledRect(new Rect(x, y, w * Mathf.Clamp01(trailHealth / maxHealth), h), new Color(1f, 0.85f, 0.55f));

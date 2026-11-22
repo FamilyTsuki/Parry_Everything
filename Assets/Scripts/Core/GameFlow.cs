@@ -141,6 +141,18 @@ namespace ParryEverything.Core
             hasSave = false;
             saveSummary = null;
             machine.StartGame();
+            StartCoroutine(Prologue());
+        }
+
+        // Nouvelle partie : le meurtre du chat, puis son âme qui descend ; le joueur prend la main ensuite
+        private System.Collections.IEnumerator Prologue()
+        {
+            bool cutscene = machine.BeginCutscene();
+            bool done = false;
+            MurderVision.PlayPrologue(() => done = true);
+            while (!done) yield return null;
+            while (MurderVision.IsPlaying) yield return null;
+            if (cutscene) machine.EndCutscene();
         }
 
         public void Resume()

@@ -104,6 +104,11 @@ namespace ParryEverything.Player
         // Santé globale de 0 à 1 (musique, effets d'écran)
         public float HealthRatio => body != null ? body.HealthRatio : 1f;
         public bool IsDead => body != null && body.IsDead;
+        // Chaque appui sur la parade, qu'une parade parte ou non (temps de recharge)
+        public event System.Action ParryPressed;
+        // Volume touché par les projectiles (boîte de collision ; l'origine du joueur est à ses pieds)
+        public Bounds HitBounds => box != null ? box.bounds : new Bounds(transform.position + Vector3.up * 0.4f, Vector3.one * 0.6f);
+        public Vector3 HitCenter => HitBounds.center;
         public float Facing => facing;
         public bool IsGrounded => coyoteTimer > 0f;
         public bool IsParrying() => parryTimer > 0f;
@@ -125,6 +130,7 @@ namespace ParryEverything.Player
         private BoxCollider box;
         private Vector3 baseBoxSize, baseBoxCenter;
         private PlayerBody body;
+        private StrideParry stride;
         private CatSoul soul; // visuel : âme de chat
         private GameObject parryStar;
         private AudioSource sfx;
@@ -196,6 +202,12 @@ namespace ParryEverything.Player
             {
                 gameObject.AddComponent<CatBody>();
             }
+            // Ce qui se pare sans être une attaque
+            if (GetComponent<CatBreath>() == null) gameObject.AddComponent<CatBreath>();
+            if (GetComponent<CatHeart>() == null) gameObject.AddComponent<CatHeart>();
+            stride = GetComponent<StrideParry>();
+            if (stride == null) stride = gameObject.AddComponent<StrideParry>();
+            if (GetComponent<DeathsDoor>() == null) gameObject.AddComponent<DeathsDoor>();
             parryStar = CreateStar();
             sfx = gameObject.AddComponent<AudioSource>();
             sfx.playOnAwake = false;
@@ -248,6 +260,9 @@ namespace ParryEverything.Player
             if (GameInput.Pressed(GameAction.Parry))
             {
                 lastParryPressTime = Time.time;
+                // Tout se pare, même ce qui n'attaque pas : respiration, cœur, pas, la mort (CatBreath, CatHeart,
+                // StrideParry, DeathsDoor écoutent cet appui)
+                ParryPressed?.Invoke();
                 if (TryAbsorbSoul())
                 {
                     // Parer au contact d'un ennemi étourdi : son âme est absorbée
@@ -434,7 +449,8 @@ namespace ParryEverything.Player
                 case PlayerForm.Ball: return ballSpeed;
                 default:
                     float limp = Mathf.Pow(missingFootSpeedFactor, body.MissingFootCount);
-                    if (IsRunning) return runSpeed * limp;
+                    // Course : les pas parés en rythme la poussent (StrideParry)
+                    if (IsRunning) return runSpeed * limp * (1f + (stride != null ? stride.SpeedBonus : 0f));
                     return (body.IntactLegCount >= 2 ? bodySpeed : bodySpeed * oneLegSpeedFactor) * limp;
             }
         }
@@ -501,6 +517,17 @@ namespace ParryEverything.Player
 
         // Renvoie true si les dégâts ont été pris, false si le coup a été paré
         // hitPoint : point de contact du coup (pour les étincelles), optionnel
+        // Projette le joueur (recul d'un coup, ou happé par une aspiration) : il ne contrôle plus sa course
+        // jusqu'à ce que la vitesse retombe
+        public void Knockback(Vector3 velocity)
+        {
+            if (rb == null || IsDead) return;
+            velocity.z = 0f;
+            rb.linearVelocity = velocity;
+            ballVelocityX = velocity.x;
+            isKnockedBack = true;
+        }
+
         public bool TakeDamage(float damage, Transform source = null, Vector3? hitPoint = null)
         {
             if (IsDead)
@@ -532,9 +559,7 @@ namespace ParryEverything.Player
                 Vector3 dir = transform.position - source.position;
                 dir.z = 0f;
 
-                rb.linearVelocity = dir.normalized * knockbackForce;
-                ballVelocityX = rb.linearVelocity.x;
-                isKnockedBack = true;
+                Knockback(dir.normalized * knockbackForce);
             }
 
             if (!killed)

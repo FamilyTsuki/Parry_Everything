@@ -1,0 +1,7 @@
+{
+  "enabledPlugins": {
+    "unity@anthropic-plugin-directory": true,
+    "unity-perf@anthropic-plugin-directory": true,
+    "meshy@anthropic-plugin-directory": true
+  }
+}

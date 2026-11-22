@@ -1,56 +1,128 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ParryEverything.Core
 {
-    // Vision du meurtre, quand le chat se coud la chair d'un boss : 3 plans figés, sans texte,
-    // en ombres chinoises sur fond rouge, séparés par des fondus blancs.
-    //  1. l'enfant recroquevillé, une porte ouverte et une ombre qui s'allonge vers lui ;
-    //  2. le père qui lève le bras, une bouteille dans l'autre main ;
-    //  3. le chat qui feule entre l'enfant et l'ombre du père.
-    // Les images sont dessinées en code (pas d'asset), en temps réel : la vision joue même le jeu figé.
+    // Visions du passé du chat : des plans figés sans texte (affiches abstraites : le père en bloc noir, la mère en
+    // arche crème, l'enfant en petit bloc crème, le chat en arche noire), séparés par des fondus blancs.
+    // Images : Assets/Resources/Visions/NN_nom.png (sources vectorielles : References/Flashbacks/Histoire/).
+    // Chapitres :
+    //   0  prologue, au lancement d'une nouvelle partie : le coup, le sacrifice du chat (plans rapides),
+    //      sa mort, son âme qui descend ;
+    //   1… souvenirs, un chapitre à chaque nouvelle partie du corps (chair d'un boss, pattes…), dans l'ordre de
+    //      l'histoire : la famille heureuse, la mère, la chute du père. Chapitre vu = flag GameFlags.Memory(n).
+    // Nom précédé de « ! » : plan rapide (coupe sèche, éclair rouge, secousse) pour donner du rythme.
+    // Joue en temps réel (même le jeu figé).
     public class MurderVision : MonoBehaviour
     {
-        private const int Width = 480;
-        private const int Height = 270;
-        private const float Aspect = (float)Width / Height;
+        public static readonly string[][] Chapters =
+        {
+            new[] { "11_le_coup", "!11a_le_bond", "!11b_l_impact", "!11c_les_eclats", "!11d_la_chute", "!11e_l_enfant",
+                    "12_la_mort_du_chat", "13_l_ame" },
+            new[] { "01_la_famille", "02_le_jeu", "03_le_repas" },
+            new[] { "04_la_maladie", "05_l_absence", "06_le_deuil" },
+            new[] { "07_la_premiere_bouteille", "08_la_decadence" },
+            new[] { "09_la_colere", "10_la_nuit" },
+        };
 
-        [SerializeField] private float fadeIn = 0.35f;     // depuis le blanc
-        [SerializeField] private float hold = 1.6f;        // plan figé
-        [SerializeField] private float flash = 0.25f;      // éclair blanc entre deux plans
+        private const float Aspect = 16f / 9f;
+
+        [SerializeField] private float fadeIn = 0.5f;      // depuis le blanc
+        [SerializeField] private float hold = 2.6f;        // plan figé
+        [SerializeField] private float flash = 0.3f;       // éclair blanc entre deux plans
         [SerializeField] private float fadeOut = 0.8f;     // retour au jeu
+        [SerializeField] private float zoom = 0.05f;       // lente avancée dans l'image pendant un plan
+        [SerializeField] private float quickHold = 0.42f;  // plan rapide
+        [SerializeField] private float quickFlash = 0.1f;
+        [SerializeField] private float quickShake = 14f;   // secousse d'un plan rapide (pixels)
 
-        private static readonly Color Silhouette = new Color(0.03f, 0f, 0f);
+        private sealed class Plate
+        {
+            public Texture2D Texture;
+            public bool Quick;
+            public float Start, FadeIn, Hold, Flash;
+            public float End => Start + FadeIn + Hold + Flash;
+        }
 
-        private Texture2D[] plates;
+        private static readonly Color FlashWhite = new Color(1f, 0.97f, 0.92f);
+        private static readonly Color FlashRed = new Color(0.85f, 0.12f, 0.06f);
+
+        private readonly List<Plate> plates = new List<Plate>();
         private float time;
         private Action onDone;
         private bool done;
 
         public static bool IsPlaying { get; private set; }
 
-        // Lance la vision ; onDone est appelé à la fin (avant le retour au jeu en fondu)
-        public static MurderVision Play(Action onDone)
+        // Prologue (nouvelle partie)
+        public static MurderVision PlayPrologue(Action onDone) => Play(Chapters[0], onDone);
+
+        // Prochain souvenir pas encore vu ; s'il n'en reste plus, onDone est appelé tout de suite (pas de vision)
+        public static MurderVision PlayNextMemory(Action onDone)
+        {
+            int chapter = NextMemoryChapter();
+            if (chapter < 0)
+            {
+                onDone?.Invoke();
+                return null;
+            }
+            GameSession.SetFlag(GameFlags.Memory(chapter));
+            return Play(Chapters[chapter], onDone);
+        }
+
+        // Premier chapitre de souvenirs (1…) pas encore vu ; -1 : tout a été vu
+        public static int NextMemoryChapter()
+        {
+            for (int i = 1; i < Chapters.Length; i++)
+            {
+                if (!GameSession.HasFlag(GameFlags.Memory(i))) return i;
+            }
+            return -1;
+        }
+
+        // Entrée de Chapters → nom de l'image ; plan rapide ?
+        public static string PlateName(string entry) => entry.TrimStart('!');
+        public static bool IsQuick(string entry) => entry.StartsWith("!");
+
+        public static MurderVision Play(string[] plateNames, Action onDone)
         {
             GameObject go = new GameObject("MurderVision");
             MurderVision vision = go.AddComponent<MurderVision>();
             vision.onDone = onDone;
+            float start = 0f;
+            foreach (string entry in plateNames)
+            {
+                Texture2D t = Resources.Load<Texture2D>("Visions/" + PlateName(entry));
+                if (t == null)
+                {
+                    Debug.LogWarning("Vision introuvable : Resources/Visions/" + PlateName(entry));
+                    continue;
+                }
+                bool quick = IsQuick(entry);
+                var plate = new Plate
+                {
+                    Texture = t,
+                    Quick = quick,
+                    Start = start,
+                    FadeIn = quick ? 0.03f : vision.fadeIn,
+                    Hold = quick ? vision.quickHold : vision.hold,
+                    Flash = quick ? vision.quickFlash : vision.flash,
+                };
+                vision.plates.Add(plate);
+                start = plate.End;
+            }
             IsPlaying = true;
             return vision;
         }
 
-        private float PlateDuration => fadeIn + hold + flash;
-        private float TotalDuration => plates.Length * PlateDuration + fadeOut;
-
-        private void Awake()
-        {
-            plates = new[] { PaintPlate(DrawChildAlone), PaintPlate(DrawFatherRaisesArm), PaintPlate(DrawCatHisses) };
-        }
+        private float PlatesEnd => plates.Count > 0 ? plates[plates.Count - 1].End : 0f;
+        private float TotalDuration => PlatesEnd + fadeOut;
 
         private void Update()
         {
             time += Time.unscaledDeltaTime;
-            if (!done && time >= plates.Length * PlateDuration)
+            if (!done && time >= PlatesEnd)
             {
                 done = true;
                 onDone?.Invoke();
@@ -61,44 +133,57 @@ namespace ParryEverything.Core
         private void OnDestroy()
         {
             IsPlaying = false;
-            if (plates == null) return;
-            foreach (Texture2D t in plates) if (t != null) Destroy(t);
         }
 
         private void OnGUI()
         {
-            if (Event.current.type != EventType.Repaint || plates == null) return;
+            if (Event.current.type != EventType.Repaint) return;
             GUI.depth = -200;
             Rect screen = new Rect(0f, 0f, Screen.width, Screen.height);
             Color old = GUI.color;
 
-            int index = Mathf.Min((int)(time / PlateDuration), plates.Length);
-            if (index < plates.Length)
+            Plate p = plates.Find(x => time < x.End);
+            if (p != null)
             {
-                float t = time - index * PlateDuration;
-                // Plan au format 16:9, centré, fond noir autour
+                float t = time - p.Start;
+                float length = p.End - p.Start;
+                // Plan au format 16:9, centré, fond noir autour ; il avance lentement vers le spectateur
+                // (plan rapide : avance plus vite et tremble)
                 GUI.color = Color.black;
                 GUI.DrawTexture(screen, Texture2D.whiteTexture);
                 GUI.color = Color.white;
-                GUI.DrawTexture(FitRect(screen), plates[index], ScaleMode.StretchToFill);
+                float z = 1f + (p.Quick ? zoom * 1.6f : zoom) * Mathf.SmoothStep(0f, 1f, t / length);
+                Rect fit = FitRect(screen);
+                float shake = p.Quick ? quickShake * (fit.height / 1080f) * (1f - t / length) : 0f;
+                Vector2 jitter = shake > 0f ? new Vector2(UnityEngine.Random.Range(-shake, shake), UnityEngine.Random.Range(-shake, shake)) : Vector2.zero;
+                Rect zoomed = new Rect(fit.center.x - fit.width * z / 2f + jitter.x, fit.center.y - fit.height * z / 2f + jitter.y, fit.width * z, fit.height * z);
+                GUI.BeginGroup(fit);
+                GUI.DrawTexture(new Rect(zoomed.x - fit.x, zoomed.y - fit.y, zoomed.width, zoomed.height), p.Texture, ScaleMode.StretchToFill);
+                GUI.EndGroup();
 
-                float white = 0f;
-                if (t < fadeIn) white = 1f - t / fadeIn;
-                else if (t > fadeIn + hold) white = (t - fadeIn - hold) / flash;
-                DrawWhite(screen, white);
+                float alpha = 0f;
+                if (t < p.FadeIn) alpha = 1f - t / p.FadeIn;
+                else if (t > p.FadeIn + p.Hold) alpha = (t - p.FadeIn - p.Hold) / p.Flash;
+                // Éclair entre deux plans : rouge autour des plans rapides, blanc sinon
+                int i = plates.IndexOf(p);
+                bool redFlash = p.Quick
+                    || (t > p.FadeIn + p.Hold && i + 1 < plates.Count && plates[i + 1].Quick)
+                    || (t < p.FadeIn && i > 0 && plates[i - 1].Quick);
+                DrawFlash(screen, alpha, redFlash ? FlashRed : FlashWhite);
             }
             else
             {
                 // Retour au jeu : le blanc s'efface
-                DrawWhite(screen, 1f - (time - plates.Length * PlateDuration) / fadeOut);
+                DrawFlash(screen, 1f - (time - PlatesEnd) / fadeOut, FlashWhite);
             }
             GUI.color = old;
         }
 
-        private static void DrawWhite(Rect screen, float alpha)
+        private static void DrawFlash(Rect screen, float alpha, Color color)
         {
             if (alpha <= 0f) return;
-            GUI.color = new Color(1f, 0.97f, 0.92f, Mathf.Clamp01(alpha));
+            color.a = Mathf.Clamp01(alpha);
+            GUI.color = color;
             GUI.DrawTexture(screen, Texture2D.whiteTexture);
         }
 
@@ -111,157 +196,6 @@ namespace ParryEverything.Core
                 w = h * Aspect;
             }
             return new Rect((screen.width - w) / 2f, (screen.height - h) / 2f, w, h);
-        }
-
-        // ---------- Peinture ----------
-        // Coordonnées : x de 0 à Aspect (gauche à droite), y de 0 à 1 (bas en haut).
-
-        private delegate void Painter(Canvas canvas);
-
-        private sealed class Canvas
-        {
-            public readonly Color[] Pixels = new Color[Width * Height];
-
-            public void Fill(Func<float, float, bool> inside, Color color)
-            {
-                for (int py = 0; py < Height; py++)
-                {
-                    float y = (py + 0.5f) / Height;
-                    for (int px = 0; px < Width; px++)
-                    {
-                        float x = (px + 0.5f) / Height;
-                        if (inside(x, y)) Pixels[py * Width + px] = color;
-                    }
-                }
-            }
-
-            public void Circle(float cx, float cy, float r, Color c) =>
-                Fill((x, y) => (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r, c);
-
-            public void Ellipse(float cx, float cy, float rx, float ry, Color c) =>
-                Fill((x, y) => (x - cx) * (x - cx) / (rx * rx) + (y - cy) * (y - cy) / (ry * ry) <= 1f, c);
-
-            public void Rect(float x0, float y0, float x1, float y1, Color c) =>
-                Fill((x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1, c);
-
-            // Trait épais de (ax, ay) à (bx, by)
-            public void Line(float ax, float ay, float bx, float by, float width, Color c)
-            {
-                float dx = bx - ax, dy = by - ay;
-                float len2 = dx * dx + dy * dy;
-                float r2 = width * width / 4f;
-                Fill((x, y) =>
-                {
-                    float t = len2 > 0f ? Mathf.Clamp01(((x - ax) * dx + (y - ay) * dy) / len2) : 0f;
-                    float ex = ax + t * dx - x, ey = ay + t * dy - y;
-                    return ex * ex + ey * ey <= r2;
-                }, c);
-            }
-
-            public void Polygon(Color c, params float[] xy)
-            {
-                Fill((x, y) =>
-                {
-                    bool inside = false;
-                    int n = xy.Length / 2;
-                    for (int i = 0, j = n - 1; i < n; j = i++)
-                    {
-                        float xi = xy[i * 2], yi = xy[i * 2 + 1], xj = xy[j * 2], yj = xy[j * 2 + 1];
-                        if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
-                    }
-                    return inside;
-                }, c);
-            }
-        }
-
-        private static Texture2D PaintPlate(Painter painter)
-        {
-            var canvas = new Canvas();
-            // Fond : rouge sombre en bas, plus clair en haut, bords assombris
-            for (int py = 0; py < Height; py++)
-            {
-                for (int px = 0; px < Width; px++)
-                {
-                    float u = (px + 0.5f) / Width, v = (py + 0.5f) / Height;
-                    Color c = Color.Lerp(new Color(0.3f, 0.02f, 0.02f), new Color(0.78f, 0.16f, 0.08f), v * 0.85f);
-                    float vignette = Mathf.Clamp01(1.2f - ((u - 0.5f) * (u - 0.5f) * 2.2f + (v - 0.55f) * (v - 0.55f) * 2f));
-                    canvas.Pixels[py * Width + px] = c * vignette;
-                }
-            }
-            // Sol
-            canvas.Rect(0f, 0f, Aspect, 0.16f, Silhouette);
-            painter(canvas);
-
-            var tex = new Texture2D(Width, Height, TextureFormat.RGB24, false) { wrapMode = TextureWrapMode.Clamp };
-            tex.SetPixels(canvas.Pixels);
-            tex.Apply();
-            return tex;
-        }
-
-        // Enfant recroquevillé, assis, les bras autour des genoux. (x, ground) = bas du dos ; s = échelle.
-        private static void DrawChild(Canvas c, float x, float s, bool facingRight = true)
-        {
-            float f = facingRight ? 1f : -1f;
-            float g = 0.16f;
-            c.Ellipse(x, g + 0.1f * s, 0.1f * s, 0.1f * s, Silhouette);                 // dos arrondi
-            c.Ellipse(x + 0.1f * s * f, g + 0.09f * s, 0.05f * s, 0.085f * s, Silhouette); // genoux
-            c.Circle(x + 0.03f * s * f, g + 0.22f * s, 0.055f * s, Silhouette);         // tête baissée
-            c.Rect(Mathf.Min(x, x + 0.17f * s * f), g, Mathf.Max(x, x + 0.17f * s * f), g + 0.03f * s, Silhouette); // pieds
-        }
-
-        // Plan 1 : l'enfant seul ; une porte ouverte, la lumière et une ombre qui s'allonge vers lui
-        private static void DrawChildAlone(Canvas c)
-        {
-            Color light = new Color(1f, 0.7f, 0.45f);
-            c.Rect(1.3f, 0.16f, 1.5f, 0.78f, light);                                           // porte éclairée
-            c.Polygon(new Color(1f, 0.55f, 0.35f), 1.3f, 0.16f, 1.5f, 0.16f, 1.2f, 0.0f, 0.75f, 0.0f); // flaque de lumière
-            c.Polygon(Silhouette, 1.36f, 0.16f, 1.44f, 0.16f, 0.98f, 0.02f, 0.88f, 0.02f);     // ombre qui avance
-            c.Rect(1.37f, 0.16f, 1.43f, 0.62f, Silhouette);                                   // quelqu'un dans la porte
-            c.Circle(1.4f, 0.67f, 0.035f, Silhouette);
-            DrawChild(c, 0.55f, 1.3f);
-        }
-
-        // Plan 2 : le père lève le bras ; l'enfant au sol devant lui
-        private static void DrawFatherRaisesArm(Canvas c)
-        {
-            float x = 1.15f;
-            c.Circle(x, 0.8f, 0.06f, Silhouette);                                              // tête
-            c.Polygon(Silhouette, x - 0.1f, 0.73f, x + 0.1f, 0.73f, x + 0.07f, 0.43f, x - 0.07f, 0.43f); // torse
-            c.Polygon(Silhouette, x - 0.07f, 0.44f, x - 0.01f, 0.44f, x - 0.03f, 0.16f, x - 0.1f, 0.16f); // jambes
-            c.Polygon(Silhouette, x + 0.01f, 0.44f, x + 0.07f, 0.44f, x + 0.11f, 0.16f, x + 0.04f, 0.16f);
-            c.Line(x - 0.08f, 0.71f, x - 0.22f, 0.93f, 0.045f, Silhouette);                   // bras levé
-            c.Line(x - 0.22f, 0.93f, x - 0.27f, 0.97f, 0.06f, Silhouette);                    // poing
-            c.Line(x + 0.09f, 0.71f, x + 0.15f, 0.5f, 0.04f, Silhouette);                     // autre bras
-            c.Rect(x + 0.135f, 0.36f, x + 0.175f, 0.49f, Silhouette);                         // bouteille
-            c.Rect(x + 0.148f, 0.49f, x + 0.162f, 0.54f, Silhouette);
-            DrawChild(c, 0.62f, 1f, false);
-        }
-
-        // Plan 3 : le chat feule devant l'enfant ; l'ombre immense du père arrive par la droite
-        private static void DrawCatHisses(Canvas c)
-        {
-            c.Ellipse(1.75f, 0.7f, 0.32f, 0.62f, Silhouette);                                  // ombre du père
-            c.Line(1.5f, 0.9f, 1.26f, 1.02f, 0.09f, Silhouette);                               // son bras
-
-            DrawChild(c, 0.42f, 1f, true);
-
-            float x = 0.9f, g = 0.16f;
-            c.Ellipse(x, g + 0.16f, 0.13f, 0.065f, Silhouette);                                // corps
-            c.Ellipse(x - 0.01f, g + 0.2f, 0.09f, 0.06f, Silhouette);                          // dos arqué
-            for (int i = 0; i < 5; i++)                                                        // poils hérissés
-            {
-                float px = x - 0.08f + i * 0.04f;
-                c.Polygon(Silhouette, px - 0.015f, g + 0.24f, px + 0.015f, g + 0.24f, px, g + 0.3f);
-            }
-            c.Circle(x + 0.15f, g + 0.19f, 0.05f, Silhouette);                                 // tête vers l'ombre
-            c.Polygon(Silhouette, x + 0.11f, g + 0.22f, x + 0.12f, g + 0.3f, x + 0.15f, g + 0.23f); // oreilles
-            c.Polygon(Silhouette, x + 0.16f, g + 0.23f, x + 0.19f, g + 0.3f, x + 0.19f, g + 0.21f);
-            c.Polygon(new Color(0.9f, 0.3f, 0.15f), x + 0.17f, g + 0.18f, x + 0.205f, g + 0.2f, x + 0.205f, g + 0.16f); // gueule ouverte
-            c.Line(x - 0.12f, g + 0.17f, x - 0.2f, g + 0.36f, 0.03f, Silhouette);              // queue dressée
-            foreach (float lx in new[] { x - 0.09f, x - 0.05f, x + 0.05f, x + 0.09f })         // pattes tendues
-            {
-                c.Line(lx, g + 0.13f, lx + 0.01f, g, 0.022f, Silhouette);
-            }
         }
     }
 }

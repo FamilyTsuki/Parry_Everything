@@ -153,7 +153,7 @@ MonoBehaviour:
   maxHealth: 250
   activationRange: 16
   groundY: -0.45
-  hoverHeight: 2.2
+  hoverHeight: 0.95
   moveSpeed: 6
   preferredDistance: 7
   hitRadius: 0.6
@@ -180,12 +180,34 @@ MonoBehaviour:
   judgmentDamage: 30
   judgmentReflectDamage: 25
   judgmentRallies: 2
+  splitDamage: 14
+  splitReflectDamage: 24
+  splitCount: 2
+  splitStagger: 0.35
+  doubleDamage: 20
+  doubleReflectDamage: 14
+  doubleOffset: 0.55
+  riggedDamage: 25
+  riggedReflectDamage: 35
+  riggedRallies: 4
+  riggedSpeedUp: 1.18
+  riggedFeintChance: 0.5
+  tugDamage: 35
+  tugReflectDamage: 40
+  tugParries: 4
+  tugSpeed: 3
+  tugSpeedUp: 1.2
+  suctionPulses: 4
+  suctionPull: 2.2
+  suctionRange: 14
+  suctionPulseDamage: 6
+  suctionYank: 11
+  suctionParryDamage: 6
+  swallowDamage: 30
   scale: 1.8
   growthPerPhase: 0.09
   turnToCamera: 25
-  armorColor: {r: 0.1, g: 0.08, b: 0.12, a: 1}
-  trimColor: {r: 0.42, g: 0.1, b: 0.07, a: 1}
-  bladeColor: {r: 0.3, g: 0.3, b: 0.36, a: 1}
+  jarModel: {fileID: 919132149155446097, guid: 61a08e18ddbfb8dbfa000e03e1e7a82a, type: 3}
   glowColor: {r: 1, g: 0.5, b: 0.1, a: 1}
   rageColor: {r: 1, g: 0.05, b: 0.12, a: 1}
   previewPhase: 0
@@ -380,6 +402,15 @@ MonoBehaviour:
   hopTilt: 12
   hopImpact: 0.6
   hopTuck: 0.12
+  crawlStride: 0.45
+  crawlReach: 0.5
+  crawlHandFront: 0.75
+  crawlHandLift: 0.1
+  crawlRestHand: 0.45
+  crawlChestLift: 0.18
+  crawlWave: 5
+  wormWave: 14
+  wormLift: 0.05
   stepRise: 0.11
   landImpact: 0.9
   bodySpringStiffness: 140
@@ -406,15 +437,30 @@ MonoBehaviour:
   parryArmAngle: 95
   airArmAngle: 55
   armSharpness: 14
-  tailWave: 8
+  tailIdle: 1
+  tailIdleAmplitude: 11
+  tailIdlePhaseStep: 0.22
+  tailIdleSpeed: 3.5
+  tailBreath: 3
+  tailDepth: 7
   tailWaveSpeed: 2.6
-  tailDrag: 3
+  tailWind: 0.12
+  tailMaxStream: 0.95
+  tailMaxBend: 110
+  tailFullSpeed: 6
+  tailFlutter: 16
+  tailFlutterSpeed: 16
+  tailGust: 10
+  tailStiffness: 70
+  tailDamping: 9
+  tailTipSoftness: 0.3
+  lookFadeTime: 1.5
+  hitFlashTime: 0.12
   furFullAbove: 0.85
   furGoneBelow: 0.15
   hypertrophyScale: 1.25
   bleedDripInterval: 0.3
   infectionMin: 0.35
-  shakeBelow: 0.35
   parryFlashTime: 0.1
   fillColor: {r: 0.75, g: 0.68, b: 0.85, a: 1}
   fillIntensity: 1.6

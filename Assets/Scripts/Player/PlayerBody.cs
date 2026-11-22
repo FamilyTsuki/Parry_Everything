@@ -30,6 +30,10 @@ namespace ParryEverything.Player
 
         // Prévient les autres scripts (flux de jeu, musique...) de la mort du joueur
         public event Action OnDied;
+        // Coup fatal sur l'âme : renvoie true si quelque chose retient la mort (elle se décidera plus tard)
+        public Func<bool> LethalHit;
+        // Repos au sanctuaire
+        public event Action OnRested;
         public event Action<Limb> OnLimbDamaged;
         // Un membre vient d'être arraché (il tombe au sol)
         public event Action<Limb> OnLimbLost;
@@ -43,6 +47,9 @@ namespace ParryEverything.Player
         private PlayerForm lastForm = PlayerForm.Soul;
 
         public bool IsDead => dead;
+        public float SoulMax => soulMax;
+        // L'âme ne se régénère plus (cœur ralenti par les parades : CatHeart)
+        public bool RegenBlocked { get; set; }
         // Outil de debug : les coups ne font plus rien
         public bool Invulnerable { get; set; }
         public float SoulRatio => soulMax > 0f ? Mathf.Clamp01(soul / soulMax) : 0f;
@@ -74,7 +81,7 @@ namespace ParryEverything.Player
 
         private void Update()
         {
-            if (dead || soul >= soulMax) return;
+            if (dead || soul >= soulMax || RegenBlocked) return;
             if (Time.time - lastHitTime < soulRegenDelay) return;
             soul = Mathf.Min(soulMax, soul + soulRegenRate * Time.deltaTime);
         }
@@ -119,6 +126,12 @@ namespace ParryEverything.Player
 
             soul = Mathf.Max(0f, soul - damage);
             if (soul > 0f) return false;
+            // Coup fatal : la mort peut encore se parer (DeathsDoor). L'âme ne tient plus qu'à un fil.
+            if (LethalHit != null && LethalHit())
+            {
+                soul = soulMax * 0.02f;
+                return false;
+            }
 
             dead = true;
             OnDied?.Invoke();
@@ -247,6 +260,7 @@ namespace ParryEverything.Player
             RestoreLimbs();
             Heal(soulMax);
             NotifyForm();
+            OnRested?.Invoke();
         }
 
         // La chair d'un boss s'agglutine autour de l'âme : remplace tout le corps actuel par cette chair

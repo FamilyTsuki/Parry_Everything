@@ -31,13 +31,17 @@ namespace ParryEverything.Lab
         private static readonly string[] EffectLabels = { "Aucun", "Hémorr.", "Infect.", "Hypertr." };   // ordre de LimbEffect
         private static readonly (HellGuardian.LabMove move, string label)[] BossMoves =
         {
-            (HellGuardian.LabMove.Swing, "Faux"),
-            (HellGuardian.LabMove.Orbs, "Orbes"),
+            (HellGuardian.LabMove.Swing, "Frappe"),
+            (HellGuardian.LabMove.Orbs, "Cailloux"),
             (HellGuardian.LabMove.Slam, "Écrasement"),
-            (HellGuardian.LabMove.Pillars, "Piliers"),
-            (HellGuardian.LabMove.MeteorRain, "Météores"),
-            (HellGuardian.LabMove.Dash, "Charge"),
+            (HellGuardian.LabMove.Pillars, "Pics"),
+            (HellGuardian.LabMove.MeteorRain, "Pluie"),
+            (HellGuardian.LabMove.Dash, "Bond"),
             (HellGuardian.LabMove.Judgment, "Jugement"),
+            (HellGuardian.LabMove.SplitBubble, "Division"),
+            (HellGuardian.LabMove.DoubleJudgment, "Double Jug."),
+            (HellGuardian.LabMove.RiggedRally, "Truqué"),
+            (HellGuardian.LabMove.TugOfWar, "Bras de fer"),
             (HellGuardian.LabMove.Roar, "Rugissement"),
             (HellGuardian.LabMove.Stagger, "Chancelle"),
             (HellGuardian.LabMove.PhaseTransition, "Transition"),

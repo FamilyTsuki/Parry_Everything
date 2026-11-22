@@ -26,6 +26,7 @@ namespace ParryEverything.Environment
         private Transform bubble;
         private Light lantern;
         private float bubbleShown;      // 0 : cachée, 1 : visible
+        private bool trading;
 
         private void OnEnable()
         {
@@ -51,22 +52,29 @@ namespace ParryEverything.Environment
             float distance = player != null ? Mathf.Abs(player.transform.position.x - transform.position.x) : float.MaxValue;
 
             // Échange : le chat apporte le morceau de chair, avec un corps sur lequel coudre
-            if (!legsMade && distance < tradeRange && player.HasBody && GameFlow.IsPlaying &&
+            if (!legsMade && !trading && distance < tradeRange && player.HasBody && GameFlow.IsPlaying &&
                 GameSession.HasFlag(GameFlags.GuardianChunkCarried))
             {
-                Trade();
-                legsMade = true;
+                StartCoroutine(Trade());
             }
 
-            bool show = !legsMade && distance < noticeRange && player != null && !player.IsDead;
+            bool show = !legsMade && !trading && distance < noticeRange && player != null && !player.IsDead;
             bubbleShown = Mathf.MoveTowards(bubbleShown, show ? 1f : 0f, Time.deltaTime * 4f);
             bubble.gameObject.SetActive(bubbleShown > 0.01f);
             bubble.localScale = Vector3.one * Mathf.SmoothStep(0f, 1f, bubbleShown);
             bubble.localPosition = new Vector3(0f, 2.3f + Mathf.Sin(t * 2f) * 0.05f, 0f);
         }
 
-        private void Trade()
+        // Nouvelle partie du corps : un souvenir revient ; les pattes sont cousues pendant le blanc de fin
+        private System.Collections.IEnumerator Trade()
         {
+            trading = true;
+            GameFlow flow = GameFlow.Instance;
+            bool cutscene = flow != null && flow.BeginCutscene();
+            bool visionDone = false;
+            MurderVision.PlayNextMemory(() => visionDone = true);
+            while (!visionDone) yield return null;
+
             GameSession.SetFlag(GameFlags.GuardianChunkCarried, false);
             GameSession.SetFlag(GameFlags.MerchantLegsMade);
             player.AttachLimbs(Limb.CatLegs(legLife));
@@ -75,7 +83,10 @@ namespace ParryEverything.Environment
                 lifetime: new Vector2(0.4f, 1f), speed: new Vector2(1f, 4f), size: new Vector2(0.04f, 0.12f),
                 gravity: -0.2f, radius: 0.5f, duration: 0.5f);
             GameCamera.ShakeMain(0.2f, 0.1f);
-            if (GameFlow.Instance != null) GameFlow.Instance.SaveProgress();
+            while (MurderVision.IsPlaying) yield return null;
+            if (cutscene) flow.EndCutscene();
+            if (flow != null) flow.SaveProgress();
+            trading = false;
         }
 
         // ---------- Visuel ----------

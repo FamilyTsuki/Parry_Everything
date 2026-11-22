@@ -4,16 +4,27 @@ using UnityEngine;
 
 namespace ParryEverything.Boss
 {
-    // Projectiles du Gardien des Enfers.
-    //  - Orbe : vole vers le joueur. Paré : renvoyé vers le boss (bleu, plus rapide) et le blesse.
+    // Projectiles du boss. Apparence (ProjectileLook) : caillou, morceau du bol, ou orbe lumineuse (null).
+    //  - Orbe / caillou : vole vers le joueur. Paré : renvoyé vers le boss (bleu, plus rapide) et le blesse.
     //  - Onde de choc : file au ras du sol. On peut sauter par-dessus, ou la parer (elle se brise).
-    //  - Météore : zone marquée au sol, puis tombe du ciel. Paré : renvoyé vers le boss comme un orbe.
-    //  - Jugement : énorme orbe. Parée, le boss la renvoie (rallies fois) avant de la prendre de plein fouet.
-    //  - Fente : croissant de feu lancé par la faux, file à l'horizontale. Parée, elle se brise.
-    //  - Pilier : zone marquée au sol, puis colonne de feu qui jaillit. Parée, elle ne blesse pas.
+    //  - Météore / chute de pierre : zone marquée au sol, puis tombe du ciel. Paré : renvoyé vers le boss.
+    //  - Jugement : énorme projectile. Paré, le boss le renvoie (rallies fois) avant de le prendre de plein fouet.
+    //  - Pilier / pic de roche : zone marquée au sol (elle se remplit, puis flashe à l'instant où il jaillit).
+    //    Haut (infranchissable) ou bas (se saute). Parer un pilier neutralise toute sa salve.
     public class BossProjectile : MonoBehaviour
     {
-        public enum Kind { Orb, Shockwave, Slash, Pillar }
+        public enum Kind { Orb, Shockwave, Pillar }
+
+        // Salve de piliers : une seule parade suffit pour toute la salve
+        public sealed class PillarSalvo
+        {
+            public bool Parried;
+        }
+
+        private const float LowPillarHeight = 1.3f;     // pilier bas : se franchit d'un saut
+        private const float PillarHitTime = 0.4f;       // durée pendant laquelle un pilier haut blesse
+        private const float LowPillarHitTime = 0.25f;   // plus court pour un pilier bas (laisse le temps de le sauter)
+        private const float PillarFlashTime = 0.1f;     // flash de la marque juste avant le jaillissement
 
         private Kind kind;
         private Vector3 velocity;
@@ -30,37 +41,46 @@ namespace ParryEverything.Boss
         private int rallies;              // renvois restants du boss (orbe du Jugement)
         private float delay;              // météore : attente avant la chute
         private Transform marker;         // météore : zone marquée au sol
-        private bool isMeteor;
         private Color baseColor;
         private float height;             // fente / pilier : hauteur de la zone dangereuse
         private bool spent;               // pilier : a déjà frappé
         private float age;
+        private float delayTotal;         // pilier : attente totale (remplissage de la marque)
+        private bool lowPillar;
+        private PillarSalvo salvo;
+        private bool neutralized;         // pilier : salve parée, couleur de parade appliquée
+        private float baseEmission = 2.5f;  // lueur au repos (0 pour un caillou)
+        private float hitSize;              // orbe / caillou : diamètre de la zone de contact
+        private ProjectileLook look;        // matière des éclats quand il se brise
 
-        public static BossProjectile SpawnOrb(Vector3 pos, Vector3 dir, float speed, float damage, float reflectDamage, HellGuardian owner, Color color, float size = 0.45f)
+        public static BossProjectile SpawnOrb(Vector3 pos, Vector3 dir, float speed, float damage, float reflectDamage, HellGuardian owner, Color color, float size = 0.45f, ProjectileLook look = null)
         {
-            BossProjectile p = Create("BossOrb", pos, Kind.Orb, damage, owner, color);
+            BossProjectile p = Create("BossOrb", pos, Kind.Orb, damage, owner, color, look);
             p.velocity = dir.normalized * speed;
             p.reflectDamage = reflectDamage;
+            p.hitSize = size;
+            p.look = look;
+            p.groundY = owner != null ? owner.GroundY : pos.y - 50f;
 
-            GameObject orb = p.Part(LowPoly.Icosahedron(0.1f, Random.Range(0, 999)));
-            orb.transform.localScale = Vector3.one * size;
+            GameObject orb = p.Part(look != null ? look.Mesh() : LowPoly.Icosahedron(0.1f, Random.Range(0, 999)));
+            orb.transform.localScale = Vector3.one * (look != null ? look.Scale(size) : size);
 
-            // Traînée lumineuse
+            // Traînée : lumineuse (orbe) ou poussière (caillou)
+            Color tc = look != null ? look.TrailColor : color;
             TrailRenderer trail = p.gameObject.AddComponent<TrailRenderer>();
-            trail.time = 0.25f;
-            trail.startWidth = size * 0.8f;
+            trail.time = look != null ? 0.15f : 0.25f;
+            trail.startWidth = size * (look != null ? 0.5f : 0.8f);
             trail.endWidth = 0f;
             trail.material = MaterialFactory.Unlit(Color.white);
-            trail.startColor = color;
-            trail.endColor = new Color(color.r, color.g, color.b, 0f);
+            trail.startColor = tc;
+            trail.endColor = new Color(tc.r, tc.g, tc.b, 0f);
             return p;
         }
 
         // Météore : marque la zone au sol, attend 'delay', puis tombe tout droit
-        public static void SpawnMeteor(float x, float groundY, float delay, float speed, float damage, float reflectDamage, HellGuardian owner, Color color)
+        public static void SpawnMeteor(float x, float groundY, float delay, float speed, float damage, float reflectDamage, HellGuardian owner, Color color, ProjectileLook look = null)
         {
-            BossProjectile p = SpawnOrb(new Vector3(x, groundY + 12f, 0f), Vector3.down, speed, damage, reflectDamage, owner, color, 0.95f);
-            p.isMeteor = true;
+            BossProjectile p = SpawnOrb(new Vector3(x, groundY + 12f, 0f), Vector3.down, speed, damage, reflectDamage, owner, color, 0.95f, look);
             p.delay = delay;
             p.groundY = groundY;
             p.life = delay + 3f;
@@ -74,54 +94,27 @@ namespace ParryEverything.Boss
         }
 
         // Orbe du Jugement : énorme, lente, renvoyée 'rallies' fois par le boss
-        public static BossProjectile SpawnJudgment(Vector3 pos, Vector3 dir, float speed, float damage, float reflectDamage, int rallies, HellGuardian owner, Color color)
+        public static BossProjectile SpawnJudgment(Vector3 pos, Vector3 dir, float speed, float damage, float reflectDamage, int rallies, HellGuardian owner, Color color, ProjectileLook look = null)
         {
-            BossProjectile p = SpawnOrb(pos, dir, speed, damage, reflectDamage, owner, color, 1.3f);
+            BossProjectile p = SpawnOrb(pos, dir, speed, damage, reflectDamage, owner, color, 1.3f, look);
             p.rallies = rallies;
             p.life = 10f;
             return p;
         }
 
-        // Fente : croissant vertical de 'height' de haut qui file au ras du sol
-        public static void SpawnSlash(Vector3 groundPos, float dir, float speed, float damage, HellGuardian owner, Color color, float height)
+        // Pilier : marque au sol pendant 'delay', puis colonne de 'height' qui jaillit (pic de roche si 'look').
+        // 'low' : pilier bas qu'on saute (petite marque). 'salvo' : partagée par tous les piliers d'une même attaque.
+        public static void SpawnPillar(float x, float groundY, float delay, float damage, HellGuardian owner, Color color, float height, bool low, PillarSalvo salvo, ProjectileLook look = null)
         {
-            BossProjectile p = Create("BossSlash", groundPos, Kind.Slash, damage, owner, color);
-            p.velocity = new Vector3(Mathf.Sign(dir) * speed, 0f, 0f);
-            p.groundY = groundPos.y;
-            p.height = height;
-            p.life = 1.8f;
-            // Arc de lames lumineuses, bombé vers l'avant
-            Mesh seg = LowPoly.Box(1f);
-            int n = 7;
-            for (int i = 0; i < n; i++)
-            {
-                float u = i / (n - 1f);                       // 0 bas, 1 haut
-                float a = (u - 0.5f) * 140f;                  // -70..70°
-                float r = height * 0.55f;
-                GameObject g = p.Part(seg);
-                g.transform.localPosition = new Vector3(Mathf.Sign(dir) * (Mathf.Cos(a * Mathf.Deg2Rad) * r - r * 0.6f), height * 0.5f + Mathf.Sin(a * Mathf.Deg2Rad) * r, 0f);
-                g.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sign(dir) * a);
-                float thick = 0.12f + 0.16f * Mathf.Sin(u * Mathf.PI);
-                g.transform.localScale = new Vector3(thick, height * 0.24f, 0.3f);
-            }
-            TrailRenderer trail = p.gameObject.AddComponent<TrailRenderer>();
-            trail.time = 0.15f;
-            trail.startWidth = height * 0.8f;
-            trail.endWidth = 0f;
-            trail.material = MaterialFactory.Unlit(Color.white);
-            trail.startColor = new Color(color.r, color.g, color.b, 0.5f);
-            trail.endColor = new Color(color.r, color.g, color.b, 0f);
-        }
-
-        // Pilier de feu : marque au sol pendant 'delay', puis colonne de 'height' qui jaillit
-        public static void SpawnPillar(float x, float groundY, float delay, float damage, HellGuardian owner, Color color, float height)
-        {
-            BossProjectile p = Create("BossPillar", new Vector3(x, groundY, 0f), Kind.Pillar, damage, owner, color);
+            BossProjectile p = Create("BossPillar", new Vector3(x, groundY, 0f), Kind.Pillar, damage, owner, color, look);
             p.groundY = groundY;
-            p.height = height;
+            p.lowPillar = low;
+            p.height = low ? LowPillarHeight : height;
             p.delay = delay;
+            p.delayTotal = Mathf.Max(delay, 0.01f);
+            p.salvo = salvo;
             p.life = 0.75f;
-            GameObject col = p.Part(LowPoly.Prism(6, 0.6f, 0.35f, 1f, 0.4f));
+            GameObject col = p.Part(look != null ? LowPoly.Prism(5, 0.62f, 0.05f, 1f, 0.3f) : LowPoly.Prism(6, 0.6f, 0.35f, 1f, 0.4f));
             col.transform.localScale = new Vector3(1f, 0f, 1f);
             GameObject m = new GameObject("PillarMarker");
             m.transform.position = new Vector3(x, groundY + 0.03f, 0f);
@@ -130,9 +123,9 @@ namespace ParryEverything.Boss
             p.marker = m.transform;
         }
 
-        public static void SpawnShockwave(Vector3 groundPos, float dir, float speed, float damage, HellGuardian owner, Color color, float size = 1f)
+        public static void SpawnShockwave(Vector3 groundPos, float dir, float speed, float damage, HellGuardian owner, Color color, float size = 1f, ProjectileLook look = null)
         {
-            BossProjectile p = Create("BossShockwave", groundPos, Kind.Shockwave, damage, owner, color);
+            BossProjectile p = Create("BossShockwave", groundPos, Kind.Shockwave, damage, owner, color, look);
             p.velocity = new Vector3(Mathf.Sign(dir) * speed, 0f, 0f);
             p.groundY = groundPos.y;
             p.life = 2.2f;
@@ -148,7 +141,7 @@ namespace ParryEverything.Boss
             }
         }
 
-        private static BossProjectile Create(string name, Vector3 pos, Kind kind, float damage, HellGuardian owner, Color color)
+        private static BossProjectile Create(string name, Vector3 pos, Kind kind, float damage, HellGuardian owner, Color color, ProjectileLook look = null)
         {
             GameObject go = new GameObject(name);
             go.transform.position = pos;
@@ -158,10 +151,19 @@ namespace ParryEverything.Boss
             p.owner = owner;
             p.target = FindFirstObjectByType<PlayerController>();
 
-            p.baseColor = color;
-            p.mat = MaterialFactory.Lit(color);
-            p.mat.EnableKeyword("_EMISSION");
-            p.mat.SetColor("_EmissionColor", color * 2.5f);
+            if (look != null)
+            {
+                p.mat = look.CreateMaterial();
+                p.baseColor = look.BaseColor(p.mat);
+                p.baseEmission = 0f;
+            }
+            else
+            {
+                p.baseColor = color;
+                p.mat = MaterialFactory.Lit(color);
+                p.mat.EnableKeyword("_EMISSION");
+                p.mat.SetColor("_EmissionColor", color * 2.5f);
+            }
 
             p.visual = new GameObject("Visual").transform;
             p.visual.SetParent(go.transform, false);
@@ -185,8 +187,13 @@ namespace ParryEverything.Boss
             if (delay > 0f)
             {
                 delay -= dt;
-                if (marker != null) marker.localScale = Vector3.one * (0.6f + Mathf.PingPong(Time.time * 6f, 0.4f));
-                if (delay <= 0f && kind == Kind.Pillar && marker != null) Destroy(marker.gameObject);
+                if (kind == Kind.Pillar) UpdatePillarMarker();
+                else if (marker != null) marker.localScale = Vector3.one * (0.6f + Mathf.PingPong(Time.time * 6f, 0.4f));
+                if (delay <= 0f && kind == Kind.Pillar)
+                {
+                    if (marker != null) Destroy(marker.gameObject);
+                    if (!neutralized) SetColor(baseColor, baseEmission);
+                }
                 return;
             }
             age += dt;
@@ -195,6 +202,7 @@ namespace ParryEverything.Boss
                 UpdatePillar(dt);
                 return;
             }
+            Vector3 prev = transform.position;
             transform.position += velocity * dt;
             life -= dt;
             if (life <= 0f)
@@ -206,21 +214,23 @@ namespace ParryEverything.Boss
             if (kind == Kind.Orb)
             {
                 visual.Rotate(200f * dt, 300f * dt, 0f);
-                if (reflected) UpdateReflected();
-                else CheckPlayer(0.35f + visual.GetChild(0).localScale.x * 0.5f);
-
-                // Météore arrivé au sol sans toucher
-                if (isMeteor && !reflected && transform.position.y <= groundY)
+                if (reflected)
                 {
+                    // Renvoyé vers le boss : ignore le décor (la parade n'est jamais perdue)
+                    UpdateReflected();
+                    return;
+                }
+                if (ProjectileHits.TouchesPlayer(target, prev, transform.position, 0.1f + hitSize * 0.35f))
+                {
+                    HitPlayer();
+                    return;
+                }
+                // Sol, mur, objet du décor : il se brise
+                if (ProjectileHits.HitsWorld(prev, transform.position, hitSize * 0.25f, groundY, out Vector3 at))
+                {
+                    ProjectileHits.Shatter(at, hitSize, look, baseColor);
                     Destroy(gameObject);
                 }
-            }
-            else if (kind == Kind.Slash)
-            {
-                // Le croissant scintille et s'étire en avançant
-                float k = 1f + Mathf.Sin(Time.time * 40f) * 0.06f;
-                visual.localScale = new Vector3(1f + age * 0.4f, k, 1f);
-                CheckPlayer(0f);
             }
             else
             {
@@ -231,47 +241,64 @@ namespace ParryEverything.Boss
             }
         }
 
+        // Marque du pilier : se remplit pendant l'attente, puis flashe blanc à l'instant du jaillissement.
+        // Pilier bas : marque plus petite.
+        private void UpdatePillarMarker()
+        {
+            NeutralizeIfParried();
+            if (marker == null) return;
+            float fill = 1f - Mathf.Clamp01(delay / delayTotal);
+            float size = (lowPillar ? 0.6f : 1f) * Mathf.Lerp(0.3f, 1f, fill);
+            marker.localScale = new Vector3(size, 1f, size);
+            if (!neutralized && delay < PillarFlashTime) mat.SetColor("_EmissionColor", Color.white * 4f);
+        }
+
+        // Salve parée : les piliers restants deviennent inoffensifs et prennent la couleur de parade
+        private void NeutralizeIfParried()
+        {
+            if (neutralized || salvo == null || !salvo.Parried) return;
+            neutralized = true;
+            spent = true;
+            SetColor(reflectColor, 1.5f);
+        }
+
         // Colonne : jaillit en 0,08 s, reste, puis retombe. Frappe une seule fois.
         private void UpdatePillar(float dt)
         {
+            NeutralizeIfParried();
             float grow = Mathf.Clamp01(age / 0.08f) * Mathf.Clamp01((0.75f - age) / 0.2f);
             Transform col = visual.GetChild(0);
             col.localScale = new Vector3(1f + Mathf.Sin(Time.time * 35f) * 0.08f, height * grow, 1f + Mathf.Cos(Time.time * 31f) * 0.08f);
-            if (!spent && age < 0.4f && target != null)
+            float hitTime = lowPillar ? LowPillarHitTime : PillarHitTime;
+            if (!spent && age < hitTime && target != null)
             {
                 Vector3 pp = target.transform.position;
                 if (Mathf.Abs(pp.x - transform.position.x) < 0.75f && pp.y - groundY < height * grow)
                 {
                     spent = true;
-                    target.TakeDamage(damage, transform, new Vector3(transform.position.x, pp.y, 0f));
+                    bool hurt = target.TakeDamage(damage, transform, new Vector3(transform.position.x, pp.y, 0f));
+                    if (!hurt && salvo != null) salvo.Parried = true;
                 }
             }
             life -= dt;
             if (life <= 0f) Destroy(gameObject);
         }
 
+        // Onde au sol : le joueur doit être dessus et sous sa hauteur
         private void CheckPlayer(float radius)
         {
             if (target == null) return;
             Vector3 pp = target.transform.position;
-            bool touch;
-            if (kind == Kind.Orb)
-            {
-                Vector2 d = new Vector2(pp.x - transform.position.x, pp.y - transform.position.y);
-                touch = d.magnitude < radius;
-            }
-            else
-            {
-                // Onde / fente au sol : le joueur doit être dessus et sous sa hauteur
-                float w = kind == Kind.Slash ? 0.6f : 0.45f;
-                touch = Mathf.Abs(pp.x - transform.position.x) < w && pp.y - groundY < height;
-            }
-            if (!touch) return;
+            if (Mathf.Abs(pp.x - transform.position.x) < 0.45f && pp.y - groundY < height) HitPlayer();
+        }
 
-            Vector3 hitPoint = Vector3.Lerp(transform.position, pp, 0.5f);
+        private void HitPlayer()
+        {
+            Vector3 hitPoint = Vector3.Lerp(transform.position, target.HitCenter, 0.5f);
             if (target.TakeDamage(damage, transform, hitPoint) || kind != Kind.Orb)
             {
-                // Touché, ou onde parée : le projectile disparaît
+                // Touché, ou onde parée : le projectile se brise sur lui
+                if (kind == Kind.Orb) ProjectileHits.Shatter(transform.position, hitSize, look, baseColor);
                 Destroy(gameObject);
                 return;
             }
@@ -312,10 +339,10 @@ namespace ParryEverything.Boss
                 {
                     rallies--;
                     reflected = false;
-                    SetColor(baseColor, 2.5f);
+                    SetColor(baseColor, baseEmission);
                     if (target != null)
                     {
-                        Vector3 d = target.transform.position - transform.position;
+                        Vector3 d = target.HitCenter - transform.position;
                         d.z = 0f;
                         velocity = d.normalized * velocity.magnitude * 0.8f;
                     }

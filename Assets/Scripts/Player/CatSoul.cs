@@ -34,6 +34,7 @@ namespace ParryEverything.Player
 
         [Header("Lévitation")]
         [SerializeField] private float bobHeight = 0.08f;
+        [SerializeField] private float breathAmount = 0.035f;     // l'âme gonfle à chaque inspiration (CatBreath)
         [SerializeField] private float bobSpeed = 2.2f;
 
         [Header("Effet de l'air")]
@@ -85,6 +86,7 @@ namespace ParryEverything.Player
 
         private PlayerController owner;
         private PlayerBody body;
+        private CatBreath breath;
         private Rigidbody rb;
         private float soulScale = 1f;           // taille affichée : rattrape PlayerBody.SoulScale (l'âme se consume)
 
@@ -184,6 +186,9 @@ namespace ParryEverything.Player
         }
 
         // Âme cachée : la chair la recouvre entièrement (boule, corps debout)
+        // Position de la tête (le visuel de l'âme ; avec un corps, l'âme fait la tête)
+        public Vector3 HeadPosition => visual != null ? visual.transform.position : transform.position;
+
         public void SetHidden(bool value)
         {
             hidden = value;
@@ -330,7 +335,12 @@ namespace ParryEverything.Player
 
             // Position : suit le joueur, lévite
             float bob = Mathf.Sin(time * bobSpeed) * bobHeight * poseBob;
-            visual.transform.position = transform.position + offset + poseOffset + Vector3.up * bob;
+            // Respiration : gonfle à l'inspiration ; en apnée, elle tremble de plus en plus
+            if (playing && breath == null) breath = GetComponent<CatBreath>();
+            float breathValue = playing && breath != null ? breath.Value : Mathf.Sin(time * 2.2f);
+            float suffocation = playing && breath != null ? breath.Suffocation : 0f;
+            Vector3 tremble = suffocation > 0f && dt > 0f ? Random.insideUnitSphere * 0.025f * suffocation : Vector3.zero;
+            visual.transform.position = transform.position + offset + poseOffset + Vector3.up * bob + tremble;
 
             // Rotation : tête tournée vers la direction, penchée dans le mouvement
             float lean = -drag.x * leanAngle;
@@ -347,7 +357,7 @@ namespace ParryEverything.Player
             {
                 soulScale = 1f;
             }
-            visual.transform.localScale = Vector3.one * ((soulScale + punch) * poseScale);
+            visual.transform.localScale = Vector3.one * ((soulScale + punch) * poseScale * (1f + breathAmount * breathValue));
 
             Quaternion inv = Quaternion.Inverse(rot);
             dragLocal = inv * drag;
