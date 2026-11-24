@@ -428,6 +428,7 @@ namespace ParryEverything.Player
                 ballVelocityX = targetX;
             }
             rb.linearVelocity = new Vector3(targetX, v.y, 0);
+            Debug.Log(v.y);
         }
 
         // Debout, la collision monte jusqu'à la boule portée par les pattes ; le bas (les pieds) ne bouge pas
